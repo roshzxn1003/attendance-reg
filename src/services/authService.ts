@@ -1,9 +1,9 @@
 /**
  * Authentication Service
- * Manages separate password-based logins for:
- *   1. Students (Email / Roll No + default password: spiher@123)
- *   2. CR / Attendance Marking
- *   3. Administrator
+ * Manages separate password-based logins and manual password updates for:
+ *   1. Students (Email / Roll No + default password: spiher@123 or custom changed password)
+ *   2. CR / Attendance Marking (default: cr@123 or spiher@123)
+ *   3. Administrator (default: admin@123 or spiher@123)
  */
 
 import { AuthUser, LoginResult } from '../types/auth';
@@ -11,7 +11,40 @@ import { fetchStudents } from './studentService';
 import { MASTER_STUDENTS } from '../data/students';
 
 const AUTH_STORAGE_KEY = 'smart_cr_auth_user';
+const CUSTOM_PASSWORDS_KEY = 'smart_cr_custom_passwords';
+
+// ----------------------------------------------------------------
+// DEFAULT PASSWORDS (Change these directly in code if needed)
+// ----------------------------------------------------------------
 export const DEFAULT_STUDENT_PASSWORD = 'spiher@123';
+export const DEFAULT_CR_PASSWORDS = ['cr@123', 'spiher@123', 'faculty@123'];
+export const DEFAULT_ADMIN_PASSWORDS = ['admin@123', 'spiher@123', 'spiher@admin'];
+
+/**
+ * Get all custom passwords saved by users
+ */
+function getCustomPasswords(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(CUSTOM_PASSWORDS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // ignore
+  }
+  return {};
+}
+
+/**
+ * Save a custom password for a specific email or student ID
+ */
+export function setCustomPassword(identifier: string, newPass: string): void {
+  try {
+    const map = getCustomPasswords();
+    map[identifier.trim().toLowerCase()] = newPass.trim();
+    localStorage.setItem(CUSTOM_PASSWORDS_KEY, JSON.stringify(map));
+  } catch {
+    // ignore
+  }
+}
 
 /**
  * Get current cached user session from localStorage
@@ -44,7 +77,7 @@ export function setStoredUser(user: AuthUser | null): void {
 /**
  * Student Login
  * Username: Student's registered college email (e.g. abubuharii25.cse@spiher.ac.in) or Roll No (e.g. SPC25CSU001)
- * Password: spiher@123
+ * Password: spiher@123 (or custom updated password)
  */
 export async function loginStudent(
   identifier: string,
@@ -55,13 +88,6 @@ export async function loginStudent(
 
   if (!cleanId) {
     return { success: false, error: 'Please enter your registered college Email ID or Roll Number.' };
-  }
-
-  if (cleanPass !== DEFAULT_STUDENT_PASSWORD) {
-    return {
-      success: false,
-      error: `Invalid password. Please enter the default college password (${DEFAULT_STUDENT_PASSWORD}).`,
-    };
   }
 
   // Find student in current roster
@@ -90,6 +116,21 @@ export async function loginStudent(
     return {
       success: false,
       error: 'Your student account is currently deactivated. Please contact your Class Representative or Faculty.',
+    };
+  }
+
+  // Check custom password override or default password
+  const customMap = getCustomPasswords();
+  const customPass = customMap[cleanId] || (student.email ? customMap[student.email.toLowerCase()] : undefined);
+
+  const isValid = customPass ? cleanPass === customPass : cleanPass === DEFAULT_STUDENT_PASSWORD;
+
+  if (!isValid) {
+    return {
+      success: false,
+      error: customPass
+        ? 'Invalid password. Please enter your new password.'
+        : `Invalid password. Please enter the default college password (${DEFAULT_STUDENT_PASSWORD}) or your updated password.`,
     };
   }
 
@@ -124,8 +165,6 @@ export async function loginCR(
     'faculty@spiher.ac.in',
   ];
 
-  const validPasswords = ['cr@123', 'spiher@123', 'faculty@123'];
-
   if (!cleanId) {
     return { success: false, error: 'Please enter your CR email or username.' };
   }
@@ -137,10 +176,16 @@ export async function loginCR(
     };
   }
 
-  if (!validPasswords.includes(cleanPass)) {
+  // Check custom password override or default passwords
+  const customMap = getCustomPasswords();
+  const customPass = customMap[cleanId] || customMap['cr'] || customMap['cr@spiher.ac.in'];
+
+  const isValid = customPass ? cleanPass === customPass : DEFAULT_CR_PASSWORDS.includes(cleanPass);
+
+  if (!isValid) {
     return {
       success: false,
-      error: 'Invalid CR password. (Default password is cr@123 or spiher@123)',
+      error: 'Invalid CR password. (Default is cr@123 or your updated password)',
     };
   }
 
@@ -169,7 +214,6 @@ export async function loginAdmin(
   const cleanPass = password.trim();
 
   const validIds = ['admin@spiher.ac.in', 'admin', 'principal@spiher.ac.in', 'hod@spiher.ac.in'];
-  const validPasswords = ['admin@123', 'spiher@123', 'spiher@admin'];
 
   if (!cleanId) {
     return { success: false, error: 'Please enter your administrator email or username.' };
@@ -182,10 +226,16 @@ export async function loginAdmin(
     };
   }
 
-  if (!validPasswords.includes(cleanPass)) {
+  // Check custom password override or default passwords
+  const customMap = getCustomPasswords();
+  const customPass = customMap[cleanId] || customMap['admin'] || customMap['admin@spiher.ac.in'];
+
+  const isValid = customPass ? cleanPass === customPass : DEFAULT_ADMIN_PASSWORDS.includes(cleanPass);
+
+  if (!isValid) {
     return {
       success: false,
-      error: 'Invalid administrator password. (Default password is admin@123 or spiher@123)',
+      error: 'Invalid administrator password. (Default is admin@123 or your updated password)',
     };
   }
 
@@ -199,6 +249,45 @@ export async function loginAdmin(
 
   setStoredUser(authUser);
   return { success: true, user: authUser };
+}
+
+/**
+ * Change Password for any user (Student, CR, Admin)
+ */
+export async function changeUserPassword(
+  identifier: string,
+  currentPass: string,
+  newPass: string
+): Promise<{ success: boolean; error?: string }> {
+  const cleanId = identifier.trim().toLowerCase();
+  const cleanOld = currentPass.trim();
+  const cleanNew = newPass.trim();
+
+  if (!cleanNew || cleanNew.length < 4) {
+    return { success: false, error: 'New password must be at least 4 characters long.' };
+  }
+
+  // Verify current password
+  const customMap = getCustomPasswords();
+  const customPass = customMap[cleanId];
+
+  let currentValid = false;
+  if (customPass) {
+    currentValid = cleanOld === customPass;
+  } else if (cleanId.includes('admin')) {
+    currentValid = DEFAULT_ADMIN_PASSWORDS.includes(cleanOld);
+  } else if (cleanId.includes('cr')) {
+    currentValid = DEFAULT_CR_PASSWORDS.includes(cleanOld);
+  } else {
+    currentValid = cleanOld === DEFAULT_STUDENT_PASSWORD;
+  }
+
+  if (!currentValid) {
+    return { success: false, error: 'Current password is incorrect.' };
+  }
+
+  setCustomPassword(cleanId, cleanNew);
+  return { success: true };
 }
 
 /**
