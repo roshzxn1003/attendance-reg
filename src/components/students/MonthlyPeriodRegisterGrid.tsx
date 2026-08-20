@@ -39,7 +39,9 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
   const [selectedMonth, setSelectedMonth] = useState<string>('2026-08');
   const [onlyMarkedDates, setOnlyMarkedDates] = useState<boolean>(true);
   const [useTickMark, setUseTickMark] = useState<boolean>(true);
-  const [lockColumns, setLockColumns] = useState<boolean>(true);
+  const [lockColumns, setLockColumns] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 768 : false
+  );
   const [search, setSearch] = useState<string>('');
   const [matrixData, setMatrixData] = useState<MonthlyMatrixData | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
