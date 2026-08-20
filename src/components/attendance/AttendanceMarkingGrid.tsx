@@ -11,6 +11,7 @@ import {
   Users,
   Percent,
   ShieldCheck,
+  Layers,
 } from 'lucide-react';
 import { ClassId, PeriodNumber } from '../../types';
 import { Student } from '../../services/studentService';
@@ -25,7 +26,7 @@ interface AttendanceMarkingGridProps {
   classId: ClassId;
   classNameTitle: string;
   date: string;
-  periodNumber: PeriodNumber;
+  selectedPeriods: PeriodNumber[];
   dayOrderNumber: number;
   subject: string;
   timeRange: string;
@@ -37,7 +38,7 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
   classId,
   classNameTitle,
   date,
-  periodNumber,
+  selectedPeriods,
   dayOrderNumber,
   subject,
   timeRange,
@@ -62,7 +63,12 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
     markAllPresent,
     clearAll,
     save,
-  } = useAttendance(classId, date, periodNumber, students);
+  } = useAttendance(classId, date, selectedPeriods, students);
+
+  const isMultiPeriod = selectedPeriods.length > 1;
+  const periodLabel = selectedPeriods.length === 1
+    ? `Period ${selectedPeriods[0]}`
+    : `Periods ${selectedPeriods.join(', ')}`;
 
   const filteredStudents = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -85,9 +91,13 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
 
   const handleSaveClick = async () => {
     try {
-      await save();
+      const res = await save();
+      const recordsText = isMultiPeriod
+        ? `${res.savedCount} records across ${selectedPeriods.length} periods`
+        : `${res.savedCount} records`;
+
       toast.success(
-        `Saved Period ${periodNumber} (${subject}) — ${stats.present} P, ${stats.absent} A, ${stats.od} OD (${stats.percentage}%)`,
+        `Saved ${periodLabel} (${recordsText}) — ${stats.present} P, ${stats.absent} A, ${stats.od} OD (${stats.percentage}%)`,
         'Attendance Saved'
       );
       if (onSaveSuccess) {
@@ -101,17 +111,26 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
   return (
     <div className="space-y-4">
       {/* ── Period Header Bar ── */}
-      <Card className="border-blue-200 bg-white shadow-xs">
+      <Card className={cn('bg-white shadow-xs border-2', isMultiPeriod ? 'border-indigo-300' : 'border-blue-200')}>
         <CardContent className="p-4 sm:p-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-base sm:text-lg font-black text-slate-900">
-                  Period {periodNumber} — {subject}
+                  {periodLabel} — {subject}
                 </span>
+
+                {isMultiPeriod && (
+                  <Badge variant="purple" size="md" className="gap-1 font-bold">
+                    <Layers className="w-3.5 h-3.5" />
+                    {selectedPeriods.length} Periods Selected
+                  </Badge>
+                )}
+
                 <Badge variant={subject.includes('LAB') ? 'purple' : 'info'} size="md">
                   {subject.includes('LAB') ? 'Laboratory' : 'Lecture'}
                 </Badge>
+
                 {isAlreadySaved && (
                   <Badge variant="success" size="md" className="gap-1">
                     <ShieldCheck className="w-3.5 h-3.5" />
@@ -121,6 +140,7 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
               </div>
               <p className="text-xs text-slate-500 font-medium mt-1">
                 {timeRange} • Day Order {dayOrderNumber} • {formatDate(date)} • {classNameTitle}
+                {isMultiPeriod && ` • Marks will be applied across all ${selectedPeriods.length} selected periods simultaneously`}
               </p>
             </div>
 
@@ -208,7 +228,7 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
             size="sm"
             onClick={() => {
               markAllPresent();
-              toast.info('Marked all active students Present', 'Quick Action');
+              toast.info(`Marked all active students Present for ${periodLabel}`, 'Quick Action');
             }}
             className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs flex-1 sm:flex-none py-2 text-xs rounded-xl"
           >
@@ -269,9 +289,11 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
               <CheckCircle2 className="w-4 h-4" />
             </div>
             <div>
-              <p className="font-bold text-xs sm:text-sm text-emerald-900">Attendance saved successfully!</p>
+              <p className="font-bold text-xs sm:text-sm text-emerald-900">
+                Attendance saved successfully for {periodLabel}!
+              </p>
               <p className="text-emerald-800 text-[11px]">
-                {saveSuccess.savedCount} records • P: {saveSuccess.stats.present} • A: {saveSuccess.stats.absent} • OD: {saveSuccess.stats.od} • {saveSuccess.stats.percentage}%
+                {saveSuccess.savedCount} records across {saveSuccess.periodsCount} periods • P: {saveSuccess.stats.present} • A: {saveSuccess.stats.absent} • OD: {saveSuccess.stats.od} • {saveSuccess.stats.percentage}%
               </p>
             </div>
           </div>
@@ -401,7 +423,7 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
           ) : (
             <div className="flex items-center gap-2 text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 font-bold text-xs">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>All {stats.total} marked • Ready to save</span>
+              <span>All {stats.total} marked • Ready to save for {periodLabel}</span>
             </div>
           )}
         </div>
@@ -415,13 +437,21 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
             onClick={handleSaveClick}
             className={cn(
               'gap-2 w-full sm:w-auto font-black px-6 py-2.5 text-xs sm:text-sm rounded-xl shadow-md transition-all',
-              isAlreadySaved
+              isMultiPeriod
+                ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20'
+                : isAlreadySaved
                 ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20'
                 : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
             )}
           >
             <Save className="w-4 h-4" />
-            <span>{isAlreadySaved ? 'Update Attendance' : 'Save Attendance'}</span>
+            <span>
+              {isMultiPeriod
+                ? `Save All ${selectedPeriods.length} Periods`
+                : isAlreadySaved
+                ? 'Update Attendance'
+                : 'Save Attendance'}
+            </span>
           </Button>
         </div>
       </div>

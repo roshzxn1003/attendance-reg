@@ -159,14 +159,7 @@ export async function fetchAllClassAttendance(
 }
 
 /**
- * Save / Update attendance for all students in a period.
- * Strict Database Integrity & Constraint Enforcement:
- *   1. Period must be between 1 and 7.
- *   2. Date must be valid YYYY-MM-DD.
- *   3. Status must be one of 'P', 'A', 'OD'.
- *   4. Date must not be a Holiday.
- *   5. Strict Class Isolation (CSE students only in CSE-25, AIDS students only in AIDS-25).
- *   6. Unique Upsert on (student_id, date, period_number) prevents duplicate entries.
+ * Save / Update attendance for all students in a single period.
  */
 export async function savePeriodAttendance(
   classId: ClassId,
@@ -174,9 +167,29 @@ export async function savePeriodAttendance(
   periodNumber: PeriodNumber,
   studentMarks: Array<{ student_id: string; status: AttendanceStatus }>
 ): Promise<{ savedCount: number; markedAt: string }> {
-  // 1. Period Number Validation
-  if (periodNumber < 1 || periodNumber > 7) {
-    throw new Error(`Invalid period number: ${periodNumber}. Must be between 1 and 7.`);
+  const result = await saveMultiplePeriodsAttendance(classId, date, [periodNumber], studentMarks);
+  return { savedCount: result.savedCount, markedAt: result.markedAt };
+}
+
+/**
+ * Save / Update attendance for multiple selected periods simultaneously.
+ * Creates separate atomic records for each period to preserve database architecture.
+ */
+export async function saveMultiplePeriodsAttendance(
+  classId: ClassId,
+  date: string,
+  periodNumbers: PeriodNumber[],
+  studentMarks: Array<{ student_id: string; status: AttendanceStatus }>
+): Promise<{ savedCount: number; markedAt: string; periodsCount: number }> {
+  if (periodNumbers.length === 0) {
+    throw new Error('Please select at least one period to mark.');
+  }
+
+  // 1. Validate all period numbers
+  for (const p of periodNumbers) {
+    if (p < 1 || p > 7) {
+      throw new Error(`Invalid period number: ${p}. Must be between 1 and 7.`);
+    }
   }
 
   // 2. Date Format Validation
@@ -212,13 +225,19 @@ export async function savePeriodAttendance(
 
   const now = new Date().toISOString();
 
-  const payload: AttendanceItem[] = studentMarks.map((m) => ({
-    student_id: m.student_id,
-    date,
-    period_number: periodNumber,
-    status: m.status,
-    marked_at: now,
-  }));
+  // Create separate atomic records for each selected period
+  const payload: AttendanceItem[] = [];
+  for (const p of periodNumbers) {
+    for (const m of studentMarks) {
+      payload.push({
+        student_id: m.student_id,
+        date,
+        period_number: p,
+        status: m.status,
+        marked_at: now,
+      });
+    }
+  }
 
   if (isSupabaseConfigured()) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -235,18 +254,16 @@ export async function savePeriodAttendance(
 
   // Update local storage
   const local = getLocalAttendance();
+  const periodSet = new Set(periodNumbers);
+  const studentSet = new Set(studentMarks.map((m) => m.student_id));
+
   const filtered = local.filter(
-    (r) =>
-      !(
-        r.date === date &&
-        r.period_number === periodNumber &&
-        studentMarks.some((m) => m.student_id === r.student_id)
-      )
+    (r) => !(r.date === date && periodSet.has(r.period_number) && studentSet.has(r.student_id))
   );
 
   saveLocalAttendance([...filtered, ...payload]);
 
-  return { savedCount: payload.length, markedAt: now };
+  return { savedCount: payload.length, markedAt: now, periodsCount: periodNumbers.length };
 }
 
 /**

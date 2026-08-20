@@ -7,7 +7,6 @@ import {
   Percent,
   Check,
   Palmtree,
-
 } from 'lucide-react';
 import { ClassId, PeriodNumber } from '../../types';
 import { DailyAttendanceOverview } from '../../services/attendanceService';
@@ -25,7 +24,7 @@ interface DailyAttendanceOverviewCardProps {
   isHoliday: boolean;
   holidayReason?: string | null;
   onSelectPeriod: (p: PeriodNumber) => void;
-  activePeriod: PeriodNumber;
+  selectedPeriods: PeriodNumber[];
 }
 
 export const DailyAttendanceOverviewCard: React.FC<DailyAttendanceOverviewCardProps> = ({
@@ -37,7 +36,7 @@ export const DailyAttendanceOverviewCard: React.FC<DailyAttendanceOverviewCardPr
   isHoliday,
   holidayReason,
   onSelectPeriod,
-  activePeriod,
+  selectedPeriods,
 }) => {
   if (isHoliday) {
     return (
@@ -164,11 +163,11 @@ export const DailyAttendanceOverviewCard: React.FC<DailyAttendanceOverviewCardPr
 
         {/* ── Period Status Pills (Quick Navigation) ── */}
         <div className="pt-2 flex items-center justify-between flex-wrap gap-2 text-xs border-t border-slate-100">
-          <span className="font-bold text-slate-600">Recorded Periods Today:</span>
+          <span className="font-bold text-slate-600">Quick Period Selector:</span>
           <div className="flex items-center gap-1.5 flex-wrap">
             {PERIOD_TIMINGS.map((slot) => {
               const isRecorded = overview.completedPeriodNumbers.includes(slot.period);
-              const isCurrent = activePeriod === slot.period;
+              const isSelected = selectedPeriods.includes(slot.period);
 
               return (
                 <button
@@ -176,8 +175,8 @@ export const DailyAttendanceOverviewCard: React.FC<DailyAttendanceOverviewCardPr
                   type="button"
                   onClick={() => onSelectPeriod(slot.period)}
                   className={cn(
-                    'px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
-                    isCurrent
+                    'px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer select-none',
+                    isSelected
                       ? 'bg-blue-600 text-white ring-2 ring-blue-400/40 shadow-2xs'
                       : isRecorded
                       ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200'

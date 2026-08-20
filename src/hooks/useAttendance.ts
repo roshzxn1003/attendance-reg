@@ -3,7 +3,7 @@ import { AttendanceStatus, ClassId, PeriodNumber } from '../types';
 import { Student } from '../services/studentService';
 import {
   fetchPeriodAttendance,
-  savePeriodAttendance,
+  saveMultiplePeriodsAttendance,
   calculateAttendanceStats,
   PeriodAttendanceStats,
 } from '../services/attendanceService';
@@ -11,9 +11,18 @@ import {
 export function useAttendance(
   classId: ClassId,
   date: string,
-  periodNumber: PeriodNumber,
+  periodInput: PeriodNumber | PeriodNumber[],
   students: Student[]
 ) {
+  const normalizedPeriods = useMemo<PeriodNumber[]>(() => {
+    if (Array.isArray(periodInput)) {
+      return periodInput.length > 0 ? periodInput : [1];
+    }
+    return [periodInput];
+  }, [periodInput]);
+
+  const primaryPeriod = normalizedPeriods[0] || 1;
+
   const [marks, setMarks] = useState<Record<string, AttendanceStatus | undefined>>({});
   const [isAlreadySaved, setIsAlreadySaved] = useState(false);
   const [lastMarkedAt, setLastMarkedAt] = useState<string | undefined>(undefined);
@@ -23,6 +32,7 @@ export function useAttendance(
   const [saveSuccess, setSaveSuccess] = useState<{
     savedCount: number;
     markedAt: string;
+    periodsCount: number;
     stats: PeriodAttendanceStats;
   } | null>(null);
 
@@ -37,7 +47,7 @@ export function useAttendance(
       const { records, exists, lastMarkedAt: savedTime } = await fetchPeriodAttendance(
         classId,
         date,
-        periodNumber
+        primaryPeriod
       );
 
       setIsAlreadySaved(exists);
@@ -58,7 +68,7 @@ export function useAttendance(
     } finally {
       setLoading(false);
     }
-  }, [classId, date, periodNumber]);
+  }, [classId, date, primaryPeriod]);
 
   useEffect(() => {
     load();
@@ -95,9 +105,11 @@ export function useAttendance(
     return activeStudents.every((s) => Boolean(marks[s.student_id]));
   }, [marks, activeStudents]);
 
-  const save = async (): Promise<{ savedCount: number; markedAt: string }> => {
+  const save = async (): Promise<{ savedCount: number; markedAt: string; periodsCount: number }> => {
     if (!isAllMarked) {
-      throw new Error(`Please mark attendance for all ${activeStudents.length} students (${stats.notMarked} remaining unmarked).`);
+      throw new Error(
+        `Please mark attendance for all ${activeStudents.length} students (${stats.notMarked} remaining unmarked).`
+      );
     }
 
     setSaving(true);
@@ -108,13 +120,19 @@ export function useAttendance(
         status: marks[s.student_id] || 'A',
       }));
 
-      const res = await savePeriodAttendance(classId, date, periodNumber, studentMarks);
+      const res = await saveMultiplePeriodsAttendance(
+        classId,
+        date,
+        normalizedPeriods,
+        studentMarks
+      );
 
       setIsAlreadySaved(true);
       setLastMarkedAt(res.markedAt);
       setSaveSuccess({
         savedCount: res.savedCount,
         markedAt: res.markedAt,
+        periodsCount: res.periodsCount,
         stats,
       });
 

@@ -5,7 +5,18 @@ import { useApp } from '../context/AppContext';
 import { getTodayDateString, formatDate, formatTimeRange12h } from '../lib/utils';
 import { PERIOD_TIMINGS, getSubjectForSlot, DAY_ORDERS } from '../data/timetable';
 import { DayNumber, PeriodNumber } from '../types';
-import { Calendar, Clock, Palmtree, Info, Coffee, Utensils, BarChart3, CheckSquare } from 'lucide-react';
+import {
+  Calendar,
+  Clock,
+  Palmtree,
+  Info,
+  Coffee,
+  Utensils,
+  BarChart3,
+  CheckSquare,
+  Layers,
+  Check,
+} from 'lucide-react';
 import { Badge } from '../components/common/Badge';
 import { DayCycleSetupCard } from '../components/daycycle/DayCycleSetupCard';
 import { AttendanceMarkingGrid } from '../components/attendance/AttendanceMarkingGrid';
@@ -15,13 +26,14 @@ import { useDayCycle } from '../hooks/useDayCycle';
 import { useTimetable } from '../hooks/useTimetable';
 import { useStudents } from '../hooks/useStudents';
 import { useAttendanceDashboard } from '../hooks/useAttendanceDashboard';
+import { cn } from '../lib/utils';
 
 type ActiveViewMode = 'marking' | 'summary';
 
 export const AttendancePage: React.FC = () => {
   const { selectedClass } = useApp();
   const [selectedDate, setSelectedDate] = useState<string>(getTodayDateString());
-  const [selectedPeriod, setSelectedPeriod] = useState<PeriodNumber>(1);
+  const [selectedPeriods, setSelectedPeriods] = useState<PeriodNumber[]>([1]);
   const [activeView, setActiveView] = useState<ActiveViewMode>('marking');
 
   // Day Cycle Hook for active date & class
@@ -57,21 +69,59 @@ export const AttendancePage: React.FC = () => {
     ? DAY_ORDERS.find((d) => d.dayNumber === activeDayNumber)?.label ?? `Day Order ${activeDayNumber}`
     : null;
 
-  // Resolve current selected period info
-  const currentSlotRecord = activeDayNumber
-    ? timetableEntries.find((t) => t.day_number === activeDayNumber && t.period_number === selectedPeriod)
-    : undefined;
+  // Multi-Period Selection Handlers
+  const togglePeriod = (p: PeriodNumber) => {
+    setSelectedPeriods((prev) => {
+      if (prev.includes(p)) {
+        if (prev.length === 1) return prev; // keep at least 1 period
+        return prev.filter((x) => x !== p).sort((a, b) => a - b);
+      }
+      return [...prev, p].sort((a, b) => a - b);
+    });
+  };
 
-  const activeSubject = currentSlotRecord?.subject || (activeDayNumber ? getSubjectForSlot(activeDayNumber, selectedPeriod, selectedClass.id) : '');
-  const activeTiming = currentSlotRecord
-    ? formatTimeRange12h(currentSlotRecord.start_time, currentSlotRecord.end_time)
-    : PERIOD_TIMINGS.find((p) => p.period === selectedPeriod)?.label || '';
+  const selectAllPeriods = () => {
+    setSelectedPeriods([1, 2, 3, 4, 5, 6, 7]);
+  };
+
+  const selectMorningPeriods = () => {
+    setSelectedPeriods([1, 2, 3, 4]);
+  };
+
+  const selectAfternoonPeriods = () => {
+    setSelectedPeriods([5, 6, 7]);
+  };
+
+  const selectSinglePeriod = (p: PeriodNumber) => {
+    setSelectedPeriods([p]);
+  };
+
+  // Compute composite active subject & timings for multi-period selection
+  const selectedSlots = selectedPeriods.map((p) => {
+    const dbSlot = activeDayNumber
+      ? timetableEntries.find((t) => t.day_number === activeDayNumber && t.period_number === p)
+      : undefined;
+    const subj = dbSlot?.subject || (activeDayNumber ? getSubjectForSlot(activeDayNumber, p, selectedClass.id) : '');
+    const timing = dbSlot
+      ? formatTimeRange12h(dbSlot.start_time, dbSlot.end_time)
+      : PERIOD_TIMINGS.find((slot) => slot.period === p)?.label || '';
+    return { period: p, subject: subj, timing, dbSlot };
+  });
+
+  const uniqueSubjects = Array.from(new Set(selectedSlots.map((s) => s.subject).filter(Boolean)));
+  const compositeSubject = uniqueSubjects.length === 1
+    ? uniqueSubjects[0]
+    : uniqueSubjects.join(', ') || 'Attendance Period';
+
+  const compositeTiming = selectedSlots.length === 1
+    ? selectedSlots[0].timing
+    : `${selectedSlots[0]?.timing.split(' – ')[0] || ''} – ${selectedSlots[selectedSlots.length - 1]?.timing.split(' – ')[1] || ''}`;
 
   return (
     <div className="space-y-6 pb-12">
       <PageHeader
         title="Attendance Marking & Dashboard"
-        subtitle="Fast, CR-optimized period attendance marking powered by the rotating Day Order 1–Day Order 6 calendar cycle."
+        subtitle="Fast, CR-optimized period attendance marking with multi-period selection support for combined lab sessions."
         badge="Daily Flow"
       />
 
@@ -131,8 +181,8 @@ export const AttendancePage: React.FC = () => {
             overview={dailyOverview}
             isHoliday={isHoliday}
             holidayReason={currentEntry?.holiday_reason}
-            onSelectPeriod={(p) => setSelectedPeriod(p)}
-            activePeriod={selectedPeriod}
+            onSelectPeriod={(p) => togglePeriod(p)}
+            selectedPeriods={selectedPeriods}
           />
 
           {/* Navigation View Switcher (Marking vs Summary Table) */}
@@ -173,25 +223,72 @@ export const AttendancePage: React.FC = () => {
           {/* ── View 1: Period Marking Flow ── */}
           {activeView === 'marking' && (
             <div className="space-y-6">
-              {/* Period Selector Cards */}
+              {/* Multi-Period Selector Toolbar */}
               <div>
-                <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-blue-600" />
-                    {activeDayOrderLabel} Periods — {selectedClass.id}
-                  </h2>
-                  <span className="text-xs text-slate-500 font-medium">
-                    Tap period to open student marking list
-                  </span>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-blue-600" />
+                      <span>{activeDayOrderLabel} Periods</span>
+                    </h2>
+                    <Badge variant={selectedPeriods.length > 1 ? 'purple' : 'info'} size="sm" className="font-bold">
+                      {selectedPeriods.length === 1
+                        ? `Period ${selectedPeriods[0]} Selected`
+                        : `${selectedPeriods.length} Periods Selected (P${selectedPeriods.join(', P')})`}
+                    </Badge>
+                  </div>
+
+                  {/* Multi-Select Quick Action Shortcuts */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mr-0.5">
+                      Select:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={selectAllPeriods}
+                      className={cn(
+                        'px-2.5 py-1 rounded-lg text-xs font-bold transition-all border',
+                        selectedPeriods.length === 7
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                          : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                      )}
+                    >
+                      All 7
+                    </button>
+                    <button
+                      type="button"
+                      onClick={selectMorningPeriods}
+                      className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-white text-slate-600 border border-slate-300 hover:bg-slate-50"
+                    >
+                      P1–P4
+                    </button>
+                    <button
+                      type="button"
+                      onClick={selectAfternoonPeriods}
+                      className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-white text-slate-600 border border-slate-300 hover:bg-slate-50"
+                    >
+                      P5–P7
+                    </button>
+                    {selectedPeriods.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => selectSinglePeriod(selectedPeriods[0])}
+                        className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-slate-100 text-slate-700 hover:bg-slate-200"
+                      >
+                        Single (P{selectedPeriods[0]})
+                      </button>
+                    )}
+                  </div>
                 </div>
 
+                {/* 7 Period Cards with Checkbox Toggle Support */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5">
                   {PERIOD_TIMINGS.map((slot) => {
                     const dbSlot = timetableEntries.find(
                       (t) => t.day_number === activeDayNumber && t.period_number === slot.period
                     );
                     const subject = dbSlot?.subject || getSubjectForSlot(activeDayNumber, slot.period, selectedClass.id);
-                    const isSelected = selectedPeriod === slot.period;
+                    const isSelected = selectedPeriods.includes(slot.period);
                     const isLab = subject.includes('LAB');
                     const isRecorded = dailyOverview.completedPeriodNumbers.includes(slot.period);
                     const timeDisplay = dbSlot
@@ -202,15 +299,28 @@ export const AttendancePage: React.FC = () => {
                       <button
                         key={slot.period}
                         type="button"
-                        onClick={() => setSelectedPeriod(slot.period)}
-                        className={`flex flex-col p-3 rounded-xl border text-left transition-all duration-150 active:scale-98 ${
+                        onClick={() => togglePeriod(slot.period)}
+                        className={cn(
+                          'flex flex-col p-3 rounded-2xl border text-left transition-all duration-150 active:scale-98 relative select-none cursor-pointer',
                           isSelected
-                            ? 'border-blue-600 bg-blue-50/90 ring-2 ring-blue-500/40 shadow-sm'
+                            ? 'border-indigo-600 bg-indigo-50/90 ring-2 ring-indigo-500/40 shadow-sm'
                             : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80'
-                        }`}
+                        )}
                       >
+                        {/* Selected Check Indicator */}
                         <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="font-bold text-slate-500">Period {slot.period}</span>
+                          <div className="flex items-center gap-1.5">
+                            <div className={cn(
+                              'w-4 h-4 rounded flex items-center justify-center text-[10px] font-bold transition-colors',
+                              isSelected
+                                ? 'bg-indigo-600 text-white'
+                                : 'border border-slate-300 bg-white text-transparent'
+                            )}>
+                              <Check className="w-3 h-3 stroke-[3]" />
+                            </div>
+                            <span className="font-bold text-slate-700">P{slot.period}</span>
+                          </div>
+
                           <div className="flex items-center gap-1">
                             {isLab && (
                               <span className="text-[10px] px-1.5 py-0.2 bg-purple-100 text-purple-700 font-semibold rounded">
@@ -222,7 +332,8 @@ export const AttendancePage: React.FC = () => {
                             )}
                           </div>
                         </div>
-                        <div className="text-sm font-black text-slate-900 truncate">
+
+                        <div className="text-sm font-black text-slate-900 truncate mt-0.5">
                           {subject}
                         </div>
                         <div className="text-[11px] text-slate-500 font-mono mt-1">
@@ -233,27 +344,35 @@ export const AttendancePage: React.FC = () => {
                   })}
                 </div>
 
-                {/* Break Information Note */}
-                <div className="flex flex-wrap gap-2 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2.5 mt-3">
-                  <span className="font-bold text-slate-600">Official Breaks (Non-attendance):</span>
-                  <span className="inline-flex items-center gap-1 text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                    <Coffee className="w-3.5 h-3.5 text-amber-600" /> Tea Break (10:30 AM – 10:45 AM)
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                    <Utensils className="w-3.5 h-3.5 text-amber-600" /> Lunch Break (12:45 PM – 1:15 PM)
-                  </span>
+                {/* Multi-Selection Hint & Breaks Banner */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs bg-slate-50 border border-slate-200 rounded-xl p-3 mt-3">
+                  <div className="flex items-center gap-1.5 text-slate-600">
+                    <Layers className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <span>
+                      <strong>Multi-Period Tip:</strong> Tap multiple periods (e.g. 2-hour labs) to mark attendance for all selected hours at once.
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex items-center gap-1 text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-[11px] font-semibold">
+                      <Coffee className="w-3 h-3 text-amber-600" /> Tea: 10:30–10:45 AM
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-[11px] font-semibold">
+                      <Utensils className="w-3 h-3 text-amber-600" /> Lunch: 12:45–1:15 PM
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* ── Attendance Marking Grid Component ── */}
+              {/* ── Attendance Marking Grid Component with Multi-Period Support ── */}
               <AttendanceMarkingGrid
                 classId={selectedClass.id}
                 classNameTitle={selectedClass.name}
                 date={selectedDate}
-                periodNumber={selectedPeriod}
+                selectedPeriods={selectedPeriods}
                 dayOrderNumber={activeDayNumber}
-                subject={activeSubject}
-                timeRange={activeTiming}
+                subject={compositeSubject}
+                timeRange={compositeTiming}
                 students={students}
                 onSaveSuccess={reloadDashboard}
               />
