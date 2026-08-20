@@ -1,5 +1,5 @@
 -- ================================================================
--- MASTER SUPABASE AUTH & PASSWORDS SEED SCRIPT
+-- MASTER SUPABASE AUTH & PASSWORDS SEED SCRIPT (IDEMPOTENT & SAFE)
 -- ================================================================
 -- This script creates encrypted Supabase Auth accounts for:
 --   1. Administrator (admin@spiher.ac.in) -> pass: admin@123
@@ -10,7 +10,7 @@
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- 1. Create User Roles Table in public schema
+-- 1. Create / Alter User Roles Table in public schema
 CREATE TABLE IF NOT EXISTS public.user_roles (
     user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT UNIQUE NOT NULL,
@@ -21,6 +21,15 @@ CREATE TABLE IF NOT EXISTS public.user_roles (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ensure all columns exist even if the table was created previously without student_id
+ALTER TABLE public.user_roles ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE public.user_roles ADD COLUMN IF NOT EXISTS role TEXT;
+ALTER TABLE public.user_roles ADD COLUMN IF NOT EXISTS class_id TEXT;
+ALTER TABLE public.user_roles ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE public.user_roles ADD COLUMN IF NOT EXISTS student_id TEXT;
+ALTER TABLE public.user_roles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE public.user_roles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
 
