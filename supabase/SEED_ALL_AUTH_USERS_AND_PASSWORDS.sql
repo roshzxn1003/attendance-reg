@@ -123,11 +123,11 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ----------------------------------------------------------------
--- 3. SEED ADMIN & CR ACCOUNTS
+-- 3. SEED DEDICATED ADMIN & CR ACCOUNTS
 -- ----------------------------------------------------------------
-SELECT public.create_or_update_auth_user('admin@spiher.ac.in', 'admin@123', 'admin', 'System Administrator', 'CSE-25', NULL);
-SELECT public.create_or_update_auth_user('cr.cse25@spiher.ac.in', 'cr@123', 'cr', 'Class Representative (CSE-25)', 'CSE-25', NULL);
-SELECT public.create_or_update_auth_user('cr.aids25@spiher.ac.in', 'cr@123', 'cr', 'Class Representative (AIDS-25)', 'AIDS-25', NULL);
+SELECT public.create_or_update_auth_user('admin@spiher.ac.in', 'Admin#2026', 'admin', 'System Administrator', 'CSE-25', NULL);
+SELECT public.create_or_update_auth_user('cr.cse25@spiher.ac.in', 'CR#2026', 'cr', 'Class Representative (CSE-25)', 'CSE-25', NULL);
+SELECT public.create_or_update_auth_user('cr.aids25@spiher.ac.in', 'CR#2026', 'cr', 'Class Representative (AIDS-25)', 'AIDS-25', NULL);
 
 -- ----------------------------------------------------------------
 -- 4. SEED ALL 60 STUDENTS (Default password: spiher@123)

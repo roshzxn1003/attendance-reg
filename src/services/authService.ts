@@ -16,10 +16,14 @@ const CUSTOM_PASSWORDS_KEY = 'smart_cr_custom_passwords';
 
 // ----------------------------------------------------------------
 // INITIAL PASSWORDS (Configurable by admin)
+// Distinct dedicated passwords for each role:
+//   - Admin: Admin#2026 (or SpiherAdmin@2026)
+//   - CR:    CR#2026 (or SpiherCR@2026)
+//   - Student: spiher@123
 // ----------------------------------------------------------------
 export const DEFAULT_STUDENT_PASSWORD = 'spiher@123';
-export const DEFAULT_CR_PASSWORDS = ['cr@123', 'spiher@123', 'faculty@123'];
-export const DEFAULT_ADMIN_PASSWORDS = ['admin@123', 'spiher@123', 'spiher@admin'];
+export const DEFAULT_CR_PASSWORDS = ['CR#2026', 'cr@spiher2026', 'SpiherCR@2026', 'cr@123'];
+export const DEFAULT_ADMIN_PASSWORDS = ['Admin#2026', 'admin@spiher2026', 'SpiherAdmin@2026', 'admin@123'];
 
 /**
  * Get all custom passwords saved by users

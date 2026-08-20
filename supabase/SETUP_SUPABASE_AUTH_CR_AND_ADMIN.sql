@@ -131,10 +131,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 4. Seed Default Admin & CR accounts
-SELECT public.create_or_update_auth_user('admin@spiher.ac.in', 'admin@123', 'admin', 'System Administrator', 'CSE-25', NULL);
-SELECT public.create_or_update_auth_user('cr.cse25@spiher.ac.in', 'cr@123', 'cr', 'Class Representative (CSE-25)', 'CSE-25', NULL);
-SELECT public.create_or_update_auth_user('cr.aids25@spiher.ac.in', 'cr@123', 'cr', 'Class Representative (AIDS-25)', 'AIDS-25', NULL);
+-- 4. Seed Dedicated Admin & CR accounts
+SELECT public.create_or_update_auth_user('admin@spiher.ac.in', 'Admin#2026', 'admin', 'System Administrator', 'CSE-25', NULL);
+SELECT public.create_or_update_auth_user('cr.cse25@spiher.ac.in', 'CR#2026', 'cr', 'Class Representative (CSE-25)', 'CSE-25', NULL);
+SELECT public.create_or_update_auth_user('cr.aids25@spiher.ac.in', 'CR#2026', 'cr', 'Class Representative (AIDS-25)', 'AIDS-25', NULL);
 
 DO $$
 BEGIN
