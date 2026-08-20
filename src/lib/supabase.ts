@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '../types/database';
 
 // ----------------------------------------------------------------
@@ -25,14 +25,19 @@ export const isSupabaseConfigured = (): boolean => {
   );
 };
 
+// Fallback dummy credentials to prevent @supabase/supabase-js from throwing on module import
+const validUrl = isSupabaseConfigured() ? supabaseUrl! : 'https://placeholder.supabase.co';
+const validKey = isSupabaseConfigured()
+  ? supabaseAnonKey!
+  : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_anon_key_for_offline_preview_only_not_secret';
+
 /**
  * Typed Supabase client.
- * Falls back to empty strings (fails safely) if env vars are missing —
- * the isSupabaseConfigured() guard should be checked before any query.
+ * Uses safe fallback so frontend never crashes on initialization if env vars are not set.
  */
-export const supabase = createClient<Database>(
-  supabaseUrl ?? '',
-  supabaseAnonKey ?? '',
+export const supabase: SupabaseClient<Database> = createClient<Database>(
+  validUrl,
+  validKey,
   {
     auth: {
       persistSession: true,
