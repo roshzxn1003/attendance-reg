@@ -1,11 +1,12 @@
 /**
  * Authentication Service
- * Manages separate password-based logins and manual password updates for:
- *   1. Students (Email / Roll No + default password: spiher@123 or custom changed password)
- *   2. CR / Attendance Marking (default: cr@123 or spiher@123)
- *   3. Administrator (default: admin@123 or spiher@123)
+ * Seamlessly integrates Supabase Auth for CR, Admin, and Students with local fallback.
+ *   1. Supabase Auth: Attempts supabase.auth.signInWithPassword()
+ *   2. Fallback: Verifies local credentials when offline or before Supabase Auth seeding
+ *   3. Custom Passwords: Supports updating passwords in Supabase Auth & Local cache
  */
 
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { AuthUser, LoginResult } from '../types/auth';
 import { fetchStudents } from './studentService';
 import { MASTER_STUDENTS } from '../data/students';
@@ -90,7 +91,33 @@ export async function loginStudent(
     return { success: false, error: 'Please enter your registered college Email ID or Roll Number.' };
   }
 
-  // Find student in current roster
+  // 1. Try Supabase Auth first if email provided
+  if (isSupabaseConfigured() && cleanId.includes('@')) {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanId,
+        password: cleanPass,
+      });
+
+      if (!error && data.user) {
+        const metadata = data.user.user_metadata || {};
+        const authUser: AuthUser = {
+          id: data.user.id,
+          email: data.user.email || cleanId,
+          name: metadata.name || 'Student',
+          role: 'student',
+          student_id: metadata.student_id || cleanId.split('@')[0].toUpperCase(),
+          class_id: metadata.class_id || 'CSE-25',
+        };
+        setStoredUser(authUser);
+        return { success: true, user: authUser };
+      }
+    } catch {
+      // fallback below
+    }
+  }
+
+  // 2. Local student lookup fallback
   let allStudents = await fetchStudents();
   if (!allStudents || allStudents.length === 0) {
     allStudents = MASTER_STUDENTS.map((s) => ({
@@ -157,6 +184,40 @@ export async function loginCR(
   const cleanId = identifier.trim().toLowerCase();
   const cleanPass = password.trim();
 
+  // Normalize email
+  const fullEmail = cleanId.includes('@')
+    ? cleanId
+    : cleanId.includes('aids')
+    ? 'cr.aids25@spiher.ac.in'
+    : 'cr.cse25@spiher.ac.in';
+
+  // 1. Try Supabase Auth
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: fullEmail,
+        password: cleanPass,
+      });
+
+      if (!error && data.user) {
+        const metadata = data.user.user_metadata || {};
+        const classId = metadata.class_id || (fullEmail.includes('aids') ? 'AIDS-25' : 'CSE-25');
+        const authUser: AuthUser = {
+          id: data.user.id,
+          email: data.user.email || fullEmail,
+          name: metadata.name || 'Class Representative (CR)',
+          role: 'cr',
+          class_id: classId,
+        };
+        setStoredUser(authUser);
+        return { success: true, user: authUser };
+      }
+    } catch {
+      // fallback below
+    }
+  }
+
+  // 2. Local validation fallback
   const validIds = [
     'cr@spiher.ac.in',
     'cr.cse25@spiher.ac.in',
@@ -176,7 +237,6 @@ export async function loginCR(
     };
   }
 
-  // Check custom password override or default passwords
   const customMap = getCustomPasswords();
   const customPass = customMap[cleanId] || customMap['cr'] || customMap['cr@spiher.ac.in'];
 
@@ -193,7 +253,7 @@ export async function loginCR(
 
   const authUser: AuthUser = {
     id: 'cr_user',
-    email: cleanId,
+    email: fullEmail,
     name: 'Class Representative (CR)',
     role: 'cr',
     class_id: classId,
@@ -213,6 +273,35 @@ export async function loginAdmin(
   const cleanId = identifier.trim().toLowerCase();
   const cleanPass = password.trim();
 
+  // Normalize email
+  const fullEmail = cleanId.includes('@') ? cleanId : 'admin@spiher.ac.in';
+
+  // 1. Try Supabase Auth
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: fullEmail,
+        password: cleanPass,
+      });
+
+      if (!error && data.user) {
+        const metadata = data.user.user_metadata || {};
+        const authUser: AuthUser = {
+          id: data.user.id,
+          email: data.user.email || fullEmail,
+          name: metadata.name || 'System Administrator (HOD / Faculty)',
+          role: 'admin',
+          class_id: 'CSE-25',
+        };
+        setStoredUser(authUser);
+        return { success: true, user: authUser };
+      }
+    } catch {
+      // fallback below
+    }
+  }
+
+  // 2. Local validation fallback
   const validIds = ['admin@spiher.ac.in', 'admin', 'principal@spiher.ac.in', 'hod@spiher.ac.in'];
 
   if (!cleanId) {
@@ -226,7 +315,6 @@ export async function loginAdmin(
     };
   }
 
-  // Check custom password override or default passwords
   const customMap = getCustomPasswords();
   const customPass = customMap[cleanId] || customMap['admin'] || customMap['admin@spiher.ac.in'];
 
@@ -241,7 +329,7 @@ export async function loginAdmin(
 
   const authUser: AuthUser = {
     id: 'admin_user',
-    email: cleanId,
+    email: fullEmail,
     name: 'System Administrator (HOD / Faculty)',
     role: 'admin',
     class_id: 'CSE-25',
@@ -267,7 +355,22 @@ export async function changeUserPassword(
     return { success: false, error: 'New password must be at least 4 characters long.' };
   }
 
-  // Verify current password
+  // 1. Try Supabase Auth password update if connected
+  if (isSupabaseConfigured()) {
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: cleanNew,
+      });
+      if (!error) {
+        setCustomPassword(cleanId, cleanNew);
+        return { success: true };
+      }
+    } catch {
+      // fallback below
+    }
+  }
+
+  // 2. Verify current local password
   const customMap = getCustomPasswords();
   const customPass = customMap[cleanId];
 
@@ -293,6 +396,13 @@ export async function changeUserPassword(
 /**
  * Logout
  */
-export function logoutUser(): void {
+export async function logoutUser(): Promise<void> {
+  if (isSupabaseConfigured()) {
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // ignore
+    }
+  }
   setStoredUser(null);
 }
