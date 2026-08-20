@@ -273,11 +273,11 @@ export const LoginPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <button
               type="button"
-              onClick={() => handleQuickFill('student', 'abubuharii25.cse@spiher.ac.in', 'spiher@123')}
+              onClick={() => handleQuickFill('student', 'arunroshangj25.cse@spiher.ac.in', 'spiher@123')}
               className="p-2 bg-white hover:bg-blue-50 border border-slate-200 rounded-xl text-left transition-colors text-xs space-y-0.5"
             >
-              <div className="font-bold text-blue-700">🎓 Student Demo</div>
-              <div className="text-[10px] text-slate-500 truncate">abubuharii25.cse@...</div>
+              <div className="font-bold text-blue-700">🎓 Student (Arun Roshan)</div>
+              <div className="text-[10px] text-slate-500 truncate">arunroshangj25.cse@...</div>
               <div className="text-[10px] font-mono text-slate-400">pass: spiher@123</div>
             </button>
 
