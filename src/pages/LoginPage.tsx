@@ -14,10 +14,8 @@ import {
   ArrowRight,
   AlertCircle,
   BookOpen,
-  Sparkles,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { DEFAULT_STUDENT_PASSWORD } from '../services/authService';
 
 type LoginPortal = 'student' | 'cr' | 'admin';
 
@@ -44,7 +42,7 @@ export const LoginPage: React.FC = () => {
       if (activePortal === 'student') {
         const res = await loginAsStudent(identifier, password);
         if (res.success && res.user) {
-          toast.success(`Welcome, ${res.user.name}!`, 'Student Login Successful');
+          toast.success(`Welcome, ${res.user.name}!`, 'Login Successful');
           navigate(fromPath || '/student-portal');
         } else {
           setErrorMsg(res.error || 'Student login failed.');
@@ -52,7 +50,7 @@ export const LoginPage: React.FC = () => {
       } else if (activePortal === 'cr') {
         const res = await loginAsCR(identifier, password);
         if (res.success && res.user) {
-          toast.success(`Welcome, Class Representative!`, 'CR Login Successful');
+          toast.success(`Welcome, Class Representative!`, 'Login Successful');
           navigate(fromPath || '/attendance');
         } else {
           setErrorMsg(res.error || 'CR login failed.');
@@ -60,7 +58,7 @@ export const LoginPage: React.FC = () => {
       } else {
         const res = await loginAsAdmin(identifier, password);
         if (res.success && res.user) {
-          toast.success(`Welcome, Administrator!`, 'Admin Login Successful');
+          toast.success(`Welcome, Administrator!`, 'Login Successful');
           navigate(fromPath || '/admin');
         } else {
           setErrorMsg(res.error || 'Admin login failed.');
@@ -71,13 +69,6 @@ export const LoginPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleQuickFill = (portal: LoginPortal, id: string, pass: string) => {
-    setActivePortal(portal);
-    setIdentifier(id);
-    setPassword(pass);
-    setErrorMsg(null);
   };
 
   return (
@@ -107,7 +98,7 @@ export const LoginPage: React.FC = () => {
               setErrorMsg(null);
             }}
             className={cn(
-              'py-2.5 rounded-xl transition-all flex flex-col items-center gap-1',
+              'py-2.5 rounded-xl transition-all flex flex-col items-center gap-1 cursor-pointer',
               activePortal === 'student'
                 ? 'bg-white text-blue-700 shadow-xs font-black'
                 : 'text-slate-600 hover:text-slate-900'
@@ -126,7 +117,7 @@ export const LoginPage: React.FC = () => {
               setErrorMsg(null);
             }}
             className={cn(
-              'py-2.5 rounded-xl transition-all flex flex-col items-center gap-1',
+              'py-2.5 rounded-xl transition-all flex flex-col items-center gap-1 cursor-pointer',
               activePortal === 'cr'
                 ? 'bg-white text-indigo-700 shadow-xs font-black'
                 : 'text-slate-600 hover:text-slate-900'
@@ -145,7 +136,7 @@ export const LoginPage: React.FC = () => {
               setErrorMsg(null);
             }}
             className={cn(
-              'py-2.5 rounded-xl transition-all flex flex-col items-center gap-1',
+              'py-2.5 rounded-xl transition-all flex flex-col items-center gap-1 cursor-pointer',
               activePortal === 'admin'
                 ? 'bg-white text-purple-700 shadow-xs font-black'
                 : 'text-slate-600 hover:text-slate-900'
@@ -162,20 +153,20 @@ export const LoginPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">
                 {activePortal === 'student' && 'Student Login'}
-                {activePortal === 'cr' && 'CR & Attendance Marking'}
+                {activePortal === 'cr' && 'CR & Faculty Login'}
                 {activePortal === 'admin' && 'Administrator Portal'}
               </CardTitle>
               <Badge
                 variant={activePortal === 'student' ? 'info' : activePortal === 'cr' ? 'purple' : 'default'}
                 size="sm"
               >
-                {activePortal === 'student' ? 'Individual Roster' : activePortal === 'cr' ? 'Marking Privileges' : 'Full Access'}
+                {activePortal === 'student' ? 'Student Roster' : activePortal === 'cr' ? 'Marking Privileges' : 'Full Control'}
               </Badge>
             </div>
             <CardDescription className="text-xs">
-              {activePortal === 'student' && `Enter your registered college email (or roll number) and default password ${DEFAULT_STUDENT_PASSWORD}.`}
-              {activePortal === 'cr' && 'Enter your class representative credentials to mark daily period attendance.'}
-              {activePortal === 'admin' && 'Enter administrator credentials to manage classes, timetable, and holidays.'}
+              {activePortal === 'student' && 'Enter your registered college Email ID or Roll Number to access your attendance records.'}
+              {activePortal === 'cr' && 'Enter your Class Representative email or username to mark daily period attendance.'}
+              {activePortal === 'admin' && 'Enter administrator credentials to manage rosters, timetables, and holidays.'}
             </CardDescription>
           </CardHeader>
 
@@ -200,7 +191,7 @@ export const LoginPage: React.FC = () => {
                     required
                     placeholder={
                       activePortal === 'student'
-                        ? 'e.g. abubuharii25.cse@spiher.ac.in or SPC25CSU001'
+                        ? 'e.g. arunroshangj25.cse@spiher.ac.in or SPC25CSU003'
                         : activePortal === 'cr'
                         ? 'e.g. cr.cse25@spiher.ac.in or cr'
                         : 'e.g. admin@spiher.ac.in or admin'
@@ -214,16 +205,9 @@ export const LoginPage: React.FC = () => {
 
               {/* Password Input */}
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
-                    Password
-                  </label>
-                  {activePortal === 'student' && (
-                    <span className="text-[11px] font-mono text-blue-600 font-bold">
-                      Default: {DEFAULT_STUDENT_PASSWORD}
-                    </span>
-                  )}
-                </div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
+                  Password
+                </label>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
@@ -244,7 +228,7 @@ export const LoginPage: React.FC = () => {
                 type="submit"
                 isLoading={loading}
                 className={cn(
-                  'w-full font-black text-xs sm:text-sm py-2.5 rounded-xl gap-2 text-white shadow-md',
+                  'w-full font-black text-xs sm:text-sm py-2.5 rounded-xl gap-2 text-white shadow-md cursor-pointer',
                   activePortal === 'student'
                     ? 'bg-blue-600 hover:bg-blue-700'
                     : activePortal === 'cr'
@@ -262,46 +246,6 @@ export const LoginPage: React.FC = () => {
             </form>
           </CardContent>
         </Card>
-
-        {/* ── Quick Demo Login Preset Chips ── */}
-        <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
-            <Sparkles className="w-4 h-4 text-amber-500" />
-            <span>Quick 1-Click Demo Logins:</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={() => handleQuickFill('student', 'arunroshangj25.cse@spiher.ac.in', 'spiher@123')}
-              className="p-2 bg-white hover:bg-blue-50 border border-slate-200 rounded-xl text-left transition-colors text-xs space-y-0.5"
-            >
-              <div className="font-bold text-blue-700">🎓 Student (Arun Roshan)</div>
-              <div className="text-[10px] text-slate-500 truncate">arunroshangj25.cse@...</div>
-              <div className="text-[10px] font-mono text-slate-400">pass: spiher@123</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickFill('cr', 'cr.cse25@spiher.ac.in', 'cr@123')}
-              className="p-2 bg-white hover:bg-indigo-50 border border-slate-200 rounded-xl text-left transition-colors text-xs space-y-0.5"
-            >
-              <div className="font-bold text-indigo-700">📋 CR Demo</div>
-              <div className="text-[10px] text-slate-500 truncate">cr.cse25@spiher.ac.in</div>
-              <div className="text-[10px] font-mono text-slate-400">pass: cr@123</div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickFill('admin', 'admin@spiher.ac.in', 'admin@123')}
-              className="p-2 bg-white hover:bg-purple-50 border border-slate-200 rounded-xl text-left transition-colors text-xs space-y-0.5"
-            >
-              <div className="font-bold text-purple-700">⚙️ Admin Demo</div>
-              <div className="text-[10px] text-slate-500 truncate">admin@spiher.ac.in</div>
-              <div className="text-[10px] font-mono text-slate-400">pass: admin@123</div>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -15,7 +15,7 @@ const AUTH_STORAGE_KEY = 'smart_cr_auth_user';
 const CUSTOM_PASSWORDS_KEY = 'smart_cr_custom_passwords';
 
 // ----------------------------------------------------------------
-// DEFAULT PASSWORDS (Change these directly in code if needed)
+// INITIAL PASSWORDS (Configurable by admin)
 // ----------------------------------------------------------------
 export const DEFAULT_STUDENT_PASSWORD = 'spiher@123';
 export const DEFAULT_CR_PASSWORDS = ['cr@123', 'spiher@123', 'faculty@123'];
@@ -78,7 +78,6 @@ export function setStoredUser(user: AuthUser | null): void {
 /**
  * Student Login
  * Username: Student's registered college email (e.g. abubuharii25.cse@spiher.ac.in) or Roll No (e.g. SPC25CSU001)
- * Password: spiher@123 (or custom updated password)
  */
 export async function loginStudent(
   identifier: string,
@@ -135,7 +134,7 @@ export async function loginStudent(
   if (!student) {
     return {
       success: false,
-      error: `No student found matching "${identifier}". Please enter your registered college email or roll number.`,
+      error: `No registered student found matching "${identifier}". Please check your email or roll number.`,
     };
   }
 
@@ -146,7 +145,7 @@ export async function loginStudent(
     };
   }
 
-  // Check custom password override or default password
+  // Check custom password override or initial password
   const customMap = getCustomPasswords();
   const customPass = customMap[cleanId] || (student.email ? customMap[student.email.toLowerCase()] : undefined);
 
@@ -155,9 +154,7 @@ export async function loginStudent(
   if (!isValid) {
     return {
       success: false,
-      error: customPass
-        ? 'Invalid password. Please enter your new password.'
-        : `Invalid password. Please enter the default college password (${DEFAULT_STUDENT_PASSWORD}) or your updated password.`,
+      error: 'Invalid password. Please verify your credentials and try again.',
     };
   }
 
@@ -233,7 +230,7 @@ export async function loginCR(
   if (!validIds.includes(cleanId) && !cleanId.includes('cr')) {
     return {
       success: false,
-      error: 'Unrecognized CR credentials. Use cr@spiher.ac.in or cr.cse25@spiher.ac.in.',
+      error: 'Unrecognized CR credentials. Please check your username or email.',
     };
   }
 
@@ -245,7 +242,7 @@ export async function loginCR(
   if (!isValid) {
     return {
       success: false,
-      error: 'Invalid CR password. (Default is cr@123 or your updated password)',
+      error: 'Invalid CR password. Please check your credentials.',
     };
   }
 
@@ -311,7 +308,7 @@ export async function loginAdmin(
   if (!validIds.includes(cleanId) && !cleanId.includes('admin')) {
     return {
       success: false,
-      error: 'Unrecognized administrator account. Use admin@spiher.ac.in or username admin.',
+      error: 'Unrecognized administrator account. Please check your username.',
     };
   }
 
@@ -323,7 +320,7 @@ export async function loginAdmin(
   if (!isValid) {
     return {
       success: false,
-      error: 'Invalid administrator password. (Default is admin@123 or your updated password)',
+      error: 'Invalid administrator password. Please check your credentials.',
     };
   }
 
