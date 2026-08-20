@@ -9,15 +9,18 @@ import {
   ChevronRight,
   Pin,
   PinOff,
+  Layers,
+  CalendarRange,
+  ArrowRight,
 } from 'lucide-react';
 import { ClassId } from '../../types';
 import { Student } from '../../services/studentService';
 import {
   MonthlyMatrixData,
-  generateMonthlyMatrix,
+  generateDateRangeMatrix,
   exportMonthlyMatrixExcel,
 } from '../../services/monthlyMatrixService';
-import { ACADEMIC_MONTHS } from '../../services/monthlyAttendanceService';
+import { ACADEMIC_MONTHS, MULTI_MONTH_PRESETS } from '../../services/monthlyAttendanceService';
 import { Card, CardContent } from '../common/Card';
 import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
@@ -30,19 +33,33 @@ interface MonthlyPeriodRegisterGridProps {
   onSelectStudent?: (student: Student) => void;
 }
 
+type RangeSelectionMode = 'single_month' | 'multi_month' | 'custom_range';
+
 export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps> = ({
   classId,
   classNameTitle,
   students,
   onSelectStudent,
 }) => {
+  // Range Mode & Dates
+  const [rangeMode, setRangeMode] = useState<RangeSelectionMode>('single_month');
   const [selectedMonth, setSelectedMonth] = useState<string>('2026-08');
+  const [selectedPreset, setSelectedPreset] = useState<string>('5m-semester');
+  const [customStartDate, setCustomStartDate] = useState<string>('2026-08-01');
+  const [customEndDate, setCustomEndDate] = useState<string>('2026-12-31');
+
+  // Display Options
   const [onlyMarkedDates, setOnlyMarkedDates] = useState<boolean>(true);
   const [useTickMark, setUseTickMark] = useState<boolean>(true);
-  const [lockColumns, setLockColumns] = useState<boolean>(() =>
+  const [lockLeftNames, setLockLeftNames] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 768 : false
+  );
+  const [lockRightTotals, setLockRightTotals] = useState<boolean>(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 768 : false
   );
   const [search, setSearch] = useState<string>('');
+
+  // Data & State
   const [matrixData, setMatrixData] = useState<MonthlyMatrixData | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [exportFeedback, setExportFeedback] = useState<string | null>(null);
@@ -57,17 +74,53 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
     return map;
   }, [students]);
 
+  // Compute active start & end dates
+  const activeDateRange = useMemo(() => {
+    if (rangeMode === 'single_month') {
+      const [y, m] = selectedMonth.split('-');
+      const days = new Date(parseInt(y, 10), parseInt(m, 10), 0).getDate();
+      const monthObj = ACADEMIC_MONTHS.find((item) => item.value === selectedMonth);
+      return {
+        startDate: `${selectedMonth}-01`,
+        endDate: `${selectedMonth}-${String(days).padStart(2, '0')}`,
+        label: monthObj ? monthObj.label.toUpperCase() : selectedMonth,
+      };
+    }
+
+    if (rangeMode === 'multi_month') {
+      const preset = MULTI_MONTH_PRESETS.find((p) => p.id === selectedPreset) || MULTI_MONTH_PRESETS[0];
+      return {
+        startDate: preset.start,
+        endDate: preset.end,
+        label: preset.label.toUpperCase(),
+      };
+    }
+
+    // Custom range
+    return {
+      startDate: customStartDate || '2026-08-01',
+      endDate: customEndDate || '2026-12-31',
+      label: `CUSTOM: ${customStartDate} TO ${customEndDate}`,
+    };
+  }, [rangeMode, selectedMonth, selectedPreset, customStartDate, customEndDate]);
+
   const loadMatrix = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await generateMonthlyMatrix(classId, selectedMonth, onlyMarkedDates);
+      const data = await generateDateRangeMatrix(
+        classId,
+        activeDateRange.startDate,
+        activeDateRange.endDate,
+        onlyMarkedDates,
+        activeDateRange.label
+      );
       setMatrixData(data);
     } catch (err) {
       console.error('Failed to load matrix:', err);
     } finally {
       setLoading(false);
     }
-  }, [classId, selectedMonth, onlyMarkedDates]);
+  }, [classId, activeDateRange, onlyMarkedDates]);
 
   useEffect(() => {
     loadMatrix();
@@ -88,10 +141,10 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
     if (!matrixData) return;
     try {
       exportMonthlyMatrixExcel(matrixData, useTickMark);
-      setExportFeedback(`Exported Attendance Register (${matrixData.monthLabel})`);
+      setExportFeedback(`Exported Register: ${matrixData.monthLabel}`);
       setTimeout(() => setExportFeedback(null), 4000);
     } catch (err) {
-      alert(`Export failed: ${String(err)}`);
+      console.error('Export failed:', err);
     }
   };
 
@@ -114,94 +167,93 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
     }
   };
 
-  const getCellDisplay = (status: string | null) => {
-    if (status === 'P') {
-      return (
-        <span className="text-emerald-700 font-black text-xs font-mono">
-          {useTickMark ? '✓' : 'P'}
-        </span>
-      );
-    }
-    if (status === 'A') {
-      return (
-        <span className="text-rose-600 font-black text-xs font-mono">
-          A
-        </span>
-      );
-    }
-    if (status === 'OD') {
-      return (
-        <span className="text-amber-700 font-black text-[10px] font-mono">
-          OD
-        </span>
-      );
-    }
-    return <span className="text-slate-200 text-xs">—</span>;
-  };
-
-  const getPercentageBadge = (pct: number, working: number) => {
-    if (working === 0) return <span className="text-slate-400 font-mono text-xs italic">—</span>;
-    const formatted = `${pct.toFixed(1)}%`;
-    if (pct >= 75) {
-      return (
-        <span className="font-mono font-bold text-xs px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200">
-          {formatted}
-        </span>
-      );
-    }
-    if (pct >= 65) {
-      return (
-        <span className="font-mono font-bold text-xs px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-300">
-          {formatted}
-        </span>
-      );
-    }
-    return (
-      <span className="font-mono font-bold text-xs px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-300">
-        {formatted}
-      </span>
-    );
-  };
-
   return (
-    <div className="space-y-6">
-      {/* ── Official Register Header Banner Card ── */}
-      <Card className="border-slate-200 bg-white shadow-xs print:shadow-none print:border-none">
-        <CardContent className="p-6">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="px-2.5 py-1 rounded-lg bg-blue-600 text-white font-black text-xs uppercase tracking-wider">
-                  College Register Template
-                </span>
-                <Badge variant="purple" size="md">
-                  {classId}
-                </Badge>
+    <div className="space-y-4">
+      {/* ── Top Multi-Month & Custom Date Range Control Card ── */}
+      <Card className="border-slate-200 bg-white shadow-xs print:hidden">
+        <CardContent className="p-4 sm:p-5 space-y-4">
+          {/* Header Banner */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3.5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                <CalendarRange className="w-5 h-5" />
               </div>
-
-              {/* Exact user requested banner typography */}
-              <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight font-mono">
-                {matrixData?.headerBanner || `B.TECH (${classId.slice(0, 3)}) 2025-2029 | II YEAR | III SEM`}
-              </h1>
-              <h2 className="text-base font-extrabold text-blue-700 uppercase tracking-widest font-mono">
-                {matrixData?.monthLabel || 'MONTHLY REGISTER'}
-              </h2>
-              <p className="text-xs text-slate-500 font-medium">
-                {classNameTitle} • Room 245 • 7 Periods / Day • Continuous Rotation Day Order 1–6
-              </p>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base font-black text-slate-900">
+                    Period Attendance Register Matrix
+                  </h3>
+                  <Badge variant="purple" size="sm">
+                    {classId}
+                  </Badge>
+                  {matrixData && (
+                    <Badge variant="info" size="sm" className="font-mono">
+                      {matrixData.dateColumns.length} Dates ({matrixData.dateColumns.length * 7} Periods)
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  {classNameTitle} • Complete 7-Period register grid with sticky left names & sticky right totals.
+                </p>
+              </div>
             </div>
 
-            {/* Actions & Selector Toolbar */}
-            <div className="flex items-center gap-2 flex-wrap self-start lg:self-auto print:hidden">
-              {/* Month Selector */}
-              <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-300">
-                <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wide">
+            {/* Mode Switcher Tabs */}
+            <div className="p-1 bg-slate-100 rounded-xl flex items-center gap-1 text-xs font-bold self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setRangeMode('single_month')}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg transition-all',
+                  rangeMode === 'single_month'
+                    ? 'bg-white text-blue-700 shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                )}
+              >
+                Single Month
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRangeMode('multi_month')}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg transition-all flex items-center gap-1',
+                  rangeMode === 'multi_month'
+                    ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                )}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Multi-Month (2–5 Mo)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRangeMode('custom_range')}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg transition-all',
+                  rangeMode === 'custom_range'
+                    ? 'bg-white text-purple-700 shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                )}
+              >
+                Custom Range
+              </button>
+            </div>
+          </div>
+
+          {/* ── Date Filters Row based on Mode ── */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 flex-wrap">
+            {/* Mode 1: Single Month Dropdown */}
+            {rangeMode === 'single_month' && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
                   Month:
                 </span>
                 <select
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="bg-transparent text-xs font-bold text-slate-900 focus:outline-none cursor-pointer"
+                  className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 cursor-pointer shadow-2xs"
                 >
                   {ACADEMIC_MONTHS.map((m) => (
                     <option key={m.value} value={m.value}>
@@ -210,32 +262,80 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                   ))}
                 </select>
               </div>
+            )}
 
-              {/* View Scope Toggle */}
-              <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs">
+            {/* Mode 2: Multi-Month Presets */}
+            {rangeMode === 'multi_month' && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wide mr-1">
+                  Preset:
+                </span>
+                {MULTI_MONTH_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => setSelectedPreset(preset.id)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-xl text-xs font-bold transition-all border cursor-pointer',
+                      selectedPreset === preset.id
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    )}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Mode 3: Custom Date Range Inputs */}
+            {rangeMode === 'custom_range' && (
+              <div className="flex items-center gap-2 flex-wrap text-xs font-bold">
+                <span className="text-slate-700 uppercase">From:</span>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                />
+                <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                <span className="text-slate-700 uppercase">To:</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+            )}
+
+            {/* Display Options & Actions */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Only Marked vs All Days */}
+              <div className="flex items-center p-0.5 bg-slate-100 rounded-xl border border-slate-200 text-xs">
                 <button
                   type="button"
                   onClick={() => setOnlyMarkedDates(true)}
                   className={cn(
-                    'px-2.5 py-1 rounded-lg font-bold transition-all text-[11px]',
+                    'px-2.5 py-1 rounded-lg font-bold transition-all text-[11px] cursor-pointer',
                     onlyMarkedDates
                       ? 'bg-white text-slate-900 shadow-2xs font-extrabold'
                       : 'text-slate-600 hover:text-slate-900'
                   )}
                 >
-                  Marked Dates
+                  Working Dates Only
                 </button>
                 <button
                   type="button"
                   onClick={() => setOnlyMarkedDates(false)}
                   className={cn(
-                    'px-2.5 py-1 rounded-lg font-bold transition-all text-[11px]',
+                    'px-2.5 py-1 rounded-lg font-bold transition-all text-[11px] cursor-pointer',
                     !onlyMarkedDates
                       ? 'bg-white text-slate-900 shadow-2xs font-extrabold'
                       : 'text-slate-600 hover:text-slate-900'
                   )}
                 >
-                  All 31 Days
+                  All Calendar Days
                 </button>
               </div>
 
@@ -243,10 +343,10 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
               <button
                 type="button"
                 onClick={() => setUseTickMark(!useTickMark)}
-                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors border border-slate-200"
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors border border-slate-200 cursor-pointer"
                 title="Toggle between checkmark (✓) and letter code (P)"
               >
-                Symbol: <span className="font-mono text-blue-600">{useTickMark ? '✓ / A / OD' : 'P / A / OD'}</span>
+                Symbol: <span className="font-mono text-blue-600">{useTickMark ? '✓' : 'P'}</span>
               </button>
 
               {/* [Export Excel] */}
@@ -254,10 +354,10 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                 variant="primary"
                 size="sm"
                 onClick={handleExportExcel}
-                className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs py-2 px-3 text-xs rounded-xl"
+                className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs py-2 px-3 text-xs rounded-xl cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Export Excel Register</span>
+                <span>Export Excel</span>
               </Button>
 
               {/* [Print] */}
@@ -265,7 +365,7 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                 variant="outline"
                 size="sm"
                 onClick={handlePrint}
-                className="gap-1.5 text-slate-700 bg-white hover:bg-slate-50 border-slate-300 font-bold shadow-2xs py-2 px-3 text-xs rounded-xl"
+                className="gap-1.5 text-slate-700 bg-white hover:bg-slate-50 border-slate-300 font-bold shadow-2xs py-2 px-3 text-xs rounded-xl cursor-pointer"
               >
                 <Printer className="w-3.5 h-3.5 text-slate-500" />
                 <span>Print</span>
@@ -275,7 +375,7 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
 
           {/* Feedback */}
           {exportFeedback && (
-            <div className="mt-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-semibold flex items-center gap-2">
+            <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-semibold flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>{exportFeedback}</span>
             </div>
@@ -297,7 +397,7 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
 
           <div className="p-3.5 bg-emerald-50/70 rounded-2xl border border-emerald-200 shadow-2xs">
             <div className="text-[11px] font-bold uppercase tracking-wide text-emerald-800">
-              Total Hours Present
+              Total Present Hours
             </div>
             <p className="text-2xl font-black text-emerald-800 mt-1">
               {matrixData.totalClassPresentHours}
@@ -343,7 +443,7 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
         </div>
       )}
 
-      {/* ── Search & View Navigation Bar ── */}
+      {/* ── Search & View Navigation Bar (With Right-Side Totals Locking Controls) ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 print:hidden bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
         {/* Search Input */}
         <div className="relative w-full sm:w-72">
@@ -359,40 +459,56 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
 
         {/* Quick Viewport Navigation Controls */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Lock / Unlock Sticky Student Names */}
+          {/* Lock / Unlock Sticky Student Names (Left) */}
           <button
             type="button"
-            onClick={() => setLockColumns(!lockColumns)}
+            onClick={() => setLockLeftNames(!lockLeftNames)}
             className={cn(
-              'px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border',
-              lockColumns
+              'px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer select-none',
+              lockLeftNames
                 ? 'bg-blue-50 text-blue-800 border-blue-200 shadow-2xs'
                 : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
             )}
-            title="Lock or unlock student names column when scrolling horizontally"
+            title="Lock or unlock student names on the left side while scrolling"
           >
-            {lockColumns ? <Pin className="w-3.5 h-3.5 text-blue-600" /> : <PinOff className="w-3.5 h-3.5 text-slate-400" />}
-            <span>{lockColumns ? 'Names Locked (Left)' : 'Free Scroll'}</span>
+            {lockLeftNames ? <Pin className="w-3.5 h-3.5 text-blue-600" /> : <PinOff className="w-3.5 h-3.5 text-slate-400" />}
+            <span>{lockLeftNames ? 'Names Locked (Left)' : 'Free Scroll (Left)'}</span>
           </button>
 
-          {/* Quick Scroll Buttons */}
+          {/* Lock / Unlock Sticky Totals (Right) */}
+          <button
+            type="button"
+            onClick={() => setLockRightTotals(!lockRightTotals)}
+            className={cn(
+              'px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer select-none',
+              lockRightTotals
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 shadow-2xs'
+                : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+            )}
+            title="Lock or unlock final totals columns on the right side while scrolling"
+          >
+            {lockRightTotals ? <Pin className="w-3.5 h-3.5 text-emerald-600" /> : <PinOff className="w-3.5 h-3.5 text-slate-400" />}
+            <span>{lockRightTotals ? 'Totals Locked (Right)' : 'Free Scroll (Right)'}</span>
+          </button>
+
+          {/* Jump Scroll Buttons */}
           <div className="flex items-center gap-1">
             <button
               type="button"
               onClick={scrollToLeft}
-              className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center gap-1 shadow-2xs"
+              className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center gap-1 shadow-2xs cursor-pointer"
               title="Jump to left side (Student names & Roll numbers)"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
-              <span>Left (Names)</span>
+              <span>Left</span>
             </button>
             <button
               type="button"
               onClick={scrollToRight}
-              className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center gap-1 shadow-2xs"
-              title="Jump to right side (Total hours present & percentage)"
+              className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center gap-1 shadow-2xs cursor-pointer"
+              title="Jump to right side (Totals & Percentage)"
             >
-              <span>Right (Totals)</span>
+              <span>Right</span>
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -403,7 +519,7 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
       {loading && (
         <div className="py-12 text-center text-slate-500 text-xs flex items-center justify-center gap-2">
           <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-          <span>Generating attendance register matrix for {selectedMonth}…</span>
+          <span>Generating attendance register matrix for {activeDateRange.label}…</span>
         </div>
       )}
 
@@ -424,7 +540,7 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                     rowSpan={2}
                     className={cn(
                       'py-2.5 px-2 w-[44px] min-w-[44px] max-w-[44px] border-r border-slate-300 bg-slate-100 font-mono text-center',
-                      lockColumns && 'sticky left-0 z-40'
+                      lockLeftNames && 'sticky left-0 z-40'
                     )}
                   >
                     No
@@ -433,7 +549,7 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                     rowSpan={2}
                     className={cn(
                       'py-2.5 px-3 w-[116px] min-w-[116px] max-w-[116px] border-r border-slate-300 bg-slate-100 font-mono text-left whitespace-nowrap',
-                      lockColumns && 'sticky left-[44px] z-40'
+                      lockLeftNames && 'sticky left-[44px] z-40'
                     )}
                   >
                     Reg No
@@ -442,7 +558,7 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                     rowSpan={2}
                     className={cn(
                       'py-2.5 px-3 w-[180px] min-w-[180px] max-w-[180px] border-r-2 border-slate-400 bg-slate-100 text-left font-bold truncate',
-                      lockColumns && 'sticky left-[160px] z-40 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)]'
+                      lockLeftNames && 'sticky left-[160px] z-40 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.12)]'
                     )}
                   >
                     Student Name
@@ -451,7 +567,7 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                   {/* Date Header Spans (7 Periods each) */}
                   {matrixData.dateColumns.length === 0 ? (
                     <th colSpan={7} className="py-2.5 px-4 text-center text-slate-400">
-                      No dates recorded in this month
+                      No dates recorded in this range ({activeDateRange.label})
                     </th>
                   ) : (
                     matrixData.dateColumns.map((col) => (
@@ -477,34 +593,49 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                     ))
                   )}
 
-                  {/* Trailing Summary Fixed Columns */}
+                  {/* ── Trailing Summary Sticky Fixed Columns (Locked on Right Side) ── */}
                   <th
                     rowSpan={2}
-                    className="py-2.5 px-2.5 min-w-[85px] border-l-2 border-r border-slate-300 bg-emerald-50 text-emerald-950 font-black text-[10px] tracking-tight leading-tight"
+                    className={cn(
+                      'py-2.5 px-2.5 w-[88px] min-w-[88px] max-w-[88px] border-l-2 border-r border-slate-300 bg-emerald-100 text-emerald-950 font-black text-[10px] tracking-tight leading-tight',
+                      lockRightTotals && 'sticky right-[244px] z-40 shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)]'
+                    )}
                   >
-                    TOTAL HOURS PRESENT
+                    TOTAL PRESENT
                   </th>
                   <th
                     rowSpan={2}
-                    className="py-2.5 px-2 min-w-[65px] border-r border-slate-300 bg-slate-100 text-slate-700 font-bold text-[10px]"
+                    className={cn(
+                      'py-2.5 px-2 w-[64px] min-w-[64px] max-w-[64px] border-r border-slate-300 bg-slate-200 text-slate-800 font-bold text-[10px]',
+                      lockRightTotals && 'sticky right-[180px] z-40'
+                    )}
                   >
                     WORKING
                   </th>
                   <th
                     rowSpan={2}
-                    className="py-2.5 px-2 min-w-[50px] border-r border-slate-300 bg-amber-50 text-amber-900 font-bold text-[10px]"
+                    className={cn(
+                      'py-2.5 px-2 w-[48px] min-w-[48px] max-w-[48px] border-r border-slate-300 bg-amber-100 text-amber-900 font-bold text-[10px]',
+                      lockRightTotals && 'sticky right-[132px] z-40'
+                    )}
                   >
                     OD
                   </th>
                   <th
                     rowSpan={2}
-                    className="py-2.5 px-2 min-w-[50px] border-r border-slate-300 bg-rose-50 text-rose-900 font-bold text-[10px]"
+                    className={cn(
+                      'py-2.5 px-2 w-[50px] min-w-[50px] max-w-[50px] border-r border-slate-300 bg-rose-100 text-rose-900 font-bold text-[10px]',
+                      lockRightTotals && 'sticky right-[82px] z-40'
+                    )}
                   >
                     ABSENT
                   </th>
                   <th
                     rowSpan={2}
-                    className="py-2.5 px-3 min-w-[75px] bg-slate-900 text-white font-black text-[10px] text-right"
+                    className={cn(
+                      'py-2.5 px-3 w-[82px] min-w-[82px] max-w-[82px] bg-slate-950 text-white font-black text-[10px] text-right',
+                      lockRightTotals && 'sticky right-0 z-40'
+                    )}
                   >
                     ATTENDANCE %
                   </th>
@@ -548,149 +679,138 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                     return (
                       <tr
                         key={s.regNo}
-                        className="hover:bg-blue-50/40 transition-colors group"
+                        onClick={() => studentObj && onSelectStudent && onSelectStudent(studentObj)}
+                        className={cn(
+                          'transition-colors group hover:bg-blue-50/40',
+                          onSelectStudent && 'cursor-pointer'
+                        )}
                       >
-                        {/* S.No */}
+                        {/* 1. S.No */}
                         <td
                           className={cn(
-                            'py-2 px-2 w-[44px] min-w-[44px] max-w-[44px] border-r border-slate-200 bg-white group-hover:bg-blue-50 font-mono text-slate-400 text-center font-bold',
-                            lockColumns && 'sticky left-0 z-20'
+                            'py-1.5 px-2 w-[44px] min-w-[44px] max-w-[44px] font-mono font-bold text-slate-500 bg-white border-r border-slate-200 text-center text-[11px] group-hover:bg-blue-50/60',
+                            lockLeftNames && 'sticky left-0 z-20 bg-white'
                           )}
                         >
                           {s.sNo}
                         </td>
 
-                        {/* Reg No */}
+                        {/* 2. Reg No */}
                         <td
                           className={cn(
-                            'py-2 px-3 w-[116px] min-w-[116px] max-w-[116px] border-r border-slate-200 bg-white group-hover:bg-blue-50 font-mono text-slate-900 text-left font-bold whitespace-nowrap',
-                            lockColumns && 'sticky left-[44px] z-20'
+                            'py-1.5 px-3 w-[116px] min-w-[116px] max-w-[116px] font-mono font-bold text-slate-900 bg-white border-r border-slate-200 text-left whitespace-nowrap text-[11px] group-hover:bg-blue-50/60',
+                            lockLeftNames && 'sticky left-[44px] z-20 bg-white'
                           )}
                         >
                           {s.regNo}
                         </td>
 
-                        {/* Student Name */}
+                        {/* 3. Student Name */}
                         <td
-                          onClick={() => studentObj && onSelectStudent && onSelectStudent(studentObj)}
                           className={cn(
-                            'py-2 px-3 w-[180px] min-w-[180px] max-w-[180px] border-r-2 border-slate-400 bg-white group-hover:bg-blue-50 font-bold text-slate-900 text-left truncate',
-                            lockColumns && 'sticky left-[160px] z-20 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)]',
-                            onSelectStudent && 'cursor-pointer hover:text-blue-700 hover:underline'
+                            'py-1.5 px-3 w-[180px] min-w-[180px] max-w-[180px] font-bold text-slate-900 bg-white border-r-2 border-slate-400 text-left truncate text-xs group-hover:bg-blue-50/60',
+                            lockLeftNames && 'sticky left-[160px] z-20 bg-white shadow-[3px_0_6px_-2px_rgba(0,0,0,0.12)]'
                           )}
+                          title={s.studentName}
                         >
                           {s.studentName}
                         </td>
 
-                        {/* Period Cells */}
+                        {/* 4. Periods for Each Date */}
                         {matrixData.dateColumns.map((col) => (
                           <React.Fragment key={`${s.regNo}_${col.dateStr}`}>
                             {[1, 2, 3, 4, 5, 6, 7].map((p) => {
                               const mark = s.marks[`${col.dateStr}_${p}`];
+                              const isP = mark === 'P';
+                              const isA = mark === 'A';
+                              const isOD = mark === 'OD';
+
                               return (
                                 <td
-                                  key={`${s.regNo}_${col.dateStr}_${p}`}
+                                  key={`${s.regNo}_${col.dateStr}_p${p}`}
                                   className={cn(
-                                    'py-1 px-0.5 border-r border-slate-100 transition-colors text-center',
+                                    'py-1 px-0.5 w-7 text-center font-mono font-bold text-[11px] border-r border-slate-100 transition-colors',
                                     p === 7 && 'border-r-slate-300',
-                                    mark === 'A' && 'bg-rose-50/60',
-                                    mark === 'OD' && 'bg-amber-50/60'
+                                    isP && 'text-emerald-700 bg-emerald-50/40',
+                                    isA && 'text-rose-700 bg-rose-100/70 font-black',
+                                    isOD && 'text-amber-800 bg-amber-100/60 font-black',
+                                    !mark && col.isHoliday && 'text-slate-300 bg-rose-50/20',
+                                    !mark && !col.isHoliday && 'text-slate-300'
                                   )}
                                 >
-                                  {getCellDisplay(mark)}
+                                  {isP
+                                    ? useTickMark
+                                      ? '✓'
+                                      : 'P'
+                                    : isA
+                                    ? 'A'
+                                    : isOD
+                                    ? 'OD'
+                                    : col.isHoliday
+                                    ? '—'
+                                    : '·'}
                                 </td>
                               );
                             })}
                           </React.Fragment>
                         ))}
 
-                        {/* Trailing Total Hours Present */}
-                        <td className="py-2 px-2.5 border-l-2 border-r border-slate-200 bg-emerald-50/60 font-mono font-black text-xs text-emerald-800 text-center">
-                          {s.totalPresent + s.totalOD}
+                        {/* ── 5. Sticky Locked Totals on the Right Side ── */}
+                        {/* Present Hours */}
+                        <td
+                          className={cn(
+                            'py-1.5 px-2.5 w-[88px] min-w-[88px] max-w-[88px] font-black font-mono text-emerald-950 bg-emerald-50/90 border-l-2 border-r border-slate-300 text-center text-xs group-hover:bg-emerald-100',
+                            lockRightTotals && 'sticky right-[244px] z-20 shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)]'
+                          )}
+                        >
+                          {s.totalPresent}
                         </td>
 
                         {/* Working Hours */}
-                        <td className="py-2 px-2 border-r border-slate-200 font-mono font-semibold text-xs text-slate-700 text-center">
+                        <td
+                          className={cn(
+                            'py-1.5 px-2 w-[64px] min-w-[64px] max-w-[64px] font-mono font-bold text-slate-700 bg-slate-100/90 border-r border-slate-200 text-center text-xs group-hover:bg-slate-200',
+                            lockRightTotals && 'sticky right-[180px] z-20'
+                          )}
+                        >
                           {s.totalWorking}
                         </td>
 
-                        {/* OD */}
-                        <td className="py-2 px-2 border-r border-slate-200 font-mono font-bold text-xs text-amber-700 text-center">
+                        {/* OD Hours */}
+                        <td
+                          className={cn(
+                            'py-1.5 px-2 w-[48px] min-w-[48px] max-w-[48px] font-mono font-bold text-amber-900 bg-amber-50/90 border-r border-slate-200 text-center text-xs group-hover:bg-amber-100',
+                            lockRightTotals && 'sticky right-[132px] z-20'
+                          )}
+                        >
                           {s.totalOD}
                         </td>
 
-                        {/* Absent */}
-                        <td className="py-2 px-2 border-r border-slate-200 font-mono font-bold text-xs text-rose-700 text-center">
+                        {/* Absent Hours */}
+                        <td
+                          className={cn(
+                            'py-1.5 px-2 w-[50px] min-w-[50px] max-w-[50px] font-mono font-bold text-rose-900 bg-rose-50/90 border-r border-slate-200 text-center text-xs group-hover:bg-rose-100',
+                            lockRightTotals && 'sticky right-[82px] z-20'
+                          )}
+                        >
                           {s.totalAbsent}
                         </td>
 
-                        {/* Percentage */}
-                        <td className="py-2 px-3 text-right whitespace-nowrap">
-                          {getPercentageBadge(s.percentage, s.totalWorking)}
+                        {/* Attendance % */}
+                        <td
+                          className={cn(
+                            'py-1.5 px-3 w-[82px] min-w-[82px] max-w-[82px] font-mono font-black text-right text-xs bg-slate-100 group-hover:bg-slate-200',
+                            lockRightTotals && 'sticky right-0 z-20',
+                            s.percentage < 75 ? 'text-rose-700 bg-rose-50' : 'text-slate-900'
+                          )}
+                        >
+                          {s.percentage.toFixed(1)}%
                         </td>
                       </tr>
                     );
                   })
                 )}
               </tbody>
-
-              {/* Bottom Aggregate Summary Row */}
-              <tfoot className="bg-slate-100 font-bold border-t-2 border-slate-400 sticky bottom-0 z-30 text-[11px]">
-                <tr>
-                  <td
-                    colSpan={3}
-                    className={cn(
-                      'py-3 px-4 w-[340px] min-w-[340px] max-w-[340px] border-r-2 border-slate-400 bg-slate-100 text-left font-black uppercase text-slate-800 tracking-wider',
-                      lockColumns && 'sticky left-0 z-40 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.15)]'
-                    )}
-                  >
-                    TOTAL PRESENT / PERIOD
-                  </td>
-
-                  {/* Period Counts */}
-                  {matrixData.dateColumns.map((col) => (
-                    <React.Fragment key={`foot_${col.dateStr}`}>
-                      {[1, 2, 3, 4, 5, 6, 7].map((p) => {
-                        let presentCount = 0;
-                        for (const s of matrixData.students) {
-                          const mark = s.marks[`${col.dateStr}_${p}`];
-                          if (mark === 'P' || mark === 'OD') presentCount++;
-                        }
-                        return (
-                          <td
-                            key={`foot_${col.dateStr}_${p}`}
-                            className={cn(
-                              'py-2 px-0.5 border-r border-slate-200 font-mono font-extrabold text-[10px] text-slate-700 text-center',
-                              p === 7 && 'border-r-slate-300'
-                            )}
-                          >
-                            {presentCount}
-                          </td>
-                        );
-                      })}
-                    </React.Fragment>
-                  ))}
-
-                  {/* Trailing Aggregates */}
-                  <td className="py-2 px-2.5 border-l-2 border-r border-slate-300 bg-emerald-100 font-mono font-black text-xs text-emerald-950 text-center">
-                    {matrixData.totalClassPresentHours + matrixData.totalClassODHours}
-                  </td>
-                  <td className="py-2 px-2 border-r border-slate-300 font-mono font-bold text-xs text-slate-800 text-center">
-                    {matrixData.totalClassWorkingHours}
-                  </td>
-                  <td className="py-2 px-2 border-r border-slate-300 font-mono font-bold text-xs text-amber-800 text-center">
-                    {matrixData.totalClassODHours}
-                  </td>
-                  <td className="py-2 px-2 border-r border-slate-300 font-mono font-bold text-xs text-rose-800 text-center">
-                    {matrixData.totalClassAbsentHours}
-                  </td>
-                  <td className="py-2 px-3 bg-slate-900 text-white font-mono font-black text-xs text-right whitespace-nowrap">
-                    {matrixData.totalClassWorkingHours > 0
-                      ? `${matrixData.classAveragePercentage.toFixed(1)}%`
-                      : '—'}
-                  </td>
-                </tr>
-              </tfoot>
             </table>
           </div>
         </div>

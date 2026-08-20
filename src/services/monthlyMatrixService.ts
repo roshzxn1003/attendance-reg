@@ -1,21 +1,20 @@
 /**
- * Monthly Period Matrix Grid Service
- * Generates the official university monthly attendance register template.
- * Matches:
- *   B.TECH (CSE) 2025-2029 | II YEAR | III SEM
- *                 JULY 2026
- * ┌────┬────────────┬──────────────┬───────────────┬──────────────┐
- * │ No │ Reg No     │ Student Name │ 01/07         │ ...          │
- * │    │            │              │ 1 2 3 4 5 6 7 │              │
- * ├────┼────────────┼──────────────┼───────────────┼──────────────┤
- * │ 1  │ SPC25CSU001│ ABU BUHARI I │ ✓ ✓ ✓ ✓ ✓ ✓ ✓ │ ...          │
- * └────┴────────────┴──────────────┴───────────────┴──────────────┘
+ * Monthly & Multi-Month Period Matrix Grid Service
+ * Generates the official university attendance register template across:
+ *   - Single Month (e.g. August 2026)
+ *   - Multi-Month Range (e.g. 2 months, 3 months, 5 months / full semester)
+ *   - Custom Date Range (e.g. 2026-08-01 to 2026-11-30)
+ *
+ * ┌────┬────────────┬──────────────┬───────────────┬───────┬──────┬─────┬────────┐
+ * │ No │ Reg No     │ Student Name │ 01/08         │ ...   │ PRES │ WRK │ ATT %  │
+ * │    │            │              │ 1 2 3 4 5 6 7 │       │      │     │        │
+ * └────┴────────────┴──────────────┴───────────────┴───────┴──────┴─────┴────────┘
  */
 
 import * as XLSX from 'xlsx';
 import { ClassId, AttendanceStatus } from '../types';
 import { fetchStudents } from './studentService';
-import { fetchMonthClassAttendance } from './monthlyAttendanceService';
+import { fetchDateRangeClassAttendance } from './monthlyAttendanceService';
 import { getAllDayCycleLogs, DayCycleEntry } from './dayCycleService';
 import { CLASSES } from '../data/classes';
 
@@ -45,7 +44,9 @@ export interface StudentMatrixRow {
 export interface MonthlyMatrixData {
   classId: ClassId;
   headerBanner: string; // e.g. "B.TECH (CSE) 2025-2029 | II YEAR | III SEM"
-  monthLabel: string;   // e.g. "JULY 2026"
+  monthLabel: string;   // e.g. "AUGUST 2026 – DECEMBER 2026 (5 MONTHS)"
+  startDate: string;
+  endDate: string;
   dateColumns: MatrixDateColumn[];
   students: StudentMatrixRow[];
   totalClassWorkingHours: number;
@@ -53,6 +54,25 @@ export interface MonthlyMatrixData {
   totalClassODHours: number;
   totalClassAbsentHours: number;
   classAveragePercentage: number;
+}
+
+/**
+ * Generate all calendar dates between startDate and endDate (inclusive).
+ */
+export function getDatesInRange(startDate: string, endDate: string): string[] {
+  const dates: string[] = [];
+  const curr = new Date(`${startDate}T12:00:00`);
+  const stop = new Date(`${endDate}T12:00:00`);
+
+  while (curr <= stop) {
+    const y = curr.getFullYear();
+    const m = String(curr.getMonth() + 1).padStart(2, '0');
+    const d = String(curr.getDate()).padStart(2, '0');
+    dates.push(`${y}-${m}-${d}`);
+    curr.setDate(curr.getDate() + 1);
+  }
+
+  return dates;
 }
 
 /**
@@ -73,12 +93,14 @@ export function getDatesInMonth(yearMonth: string): string[] {
 }
 
 /**
- * Compute the complete monthly period grid matrix dataset.
+ * Compute the complete period grid matrix dataset across any Custom Date Range (1 to N months).
  */
-export async function generateMonthlyMatrix(
+export async function generateDateRangeMatrix(
   classId: ClassId,
-  yearMonth: string, // "2026-08"
-  onlyMarkedDates = false
+  startDate: string,
+  endDate: string,
+  onlyMarkedDates = false,
+  customRangeLabel?: string
 ): Promise<MonthlyMatrixData> {
   // 1. Fetch Students
   const allStudents = await fetchStudents(classId);
@@ -92,8 +114,8 @@ export async function generateMonthlyMatrix(
     dayLogMap.set(l.date, l);
   }
 
-  // 3. Fetch Monthly Attendance
-  const rawRecords = await fetchMonthClassAttendance(classId, yearMonth, studentIds);
+  // 3. Fetch Attendance within date range
+  const rawRecords = await fetchDateRangeClassAttendance(classId, startDate, endDate, studentIds);
 
   // Map attendance by `${student_id}_${date}_${period}`
   const marksMap = new Map<string, AttendanceStatus>();
@@ -105,10 +127,10 @@ export async function generateMonthlyMatrix(
   }
 
   // 4. Build Date Columns
-  const allMonthDates = getDatesInMonth(yearMonth);
+  const allRangeDates = getDatesInRange(startDate, endDate);
   const filteredDates = onlyMarkedDates
-    ? allMonthDates.filter((d) => datesWithAttendance.has(d) || dayLogMap.has(d))
-    : allMonthDates;
+    ? allRangeDates.filter((d) => datesWithAttendance.has(d) || dayLogMap.has(d))
+    : allRangeDates;
 
   const dateColumns: MatrixDateColumn[] = filteredDates.map((dateStr) => {
     const [, month, day] = dateStr.split('-');
@@ -184,16 +206,27 @@ export async function generateMonthlyMatrix(
   const degreeStr = classId === 'CSE-25' ? 'B.TECH (CSE)' : 'B.TECH (AIDS)';
   const headerBanner = `${degreeStr} 2025-2029 | II YEAR | ${classMeta?.semester?.toUpperCase() || 'III SEM'}`;
 
-  const [y, m] = yearMonth.split('-');
-  const monthDate = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
-  const monthLabel = monthDate
-    .toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-    .toUpperCase();
+  // Formulate Month / Date Range Label
+  let monthLabel = customRangeLabel;
+  if (!monthLabel) {
+    const startDt = new Date(`${startDate}T12:00:00`);
+    const endDt = new Date(`${endDate}T12:00:00`);
+    const startStr = startDt.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    const endStr = endDt.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+    if (startStr === endStr) {
+      monthLabel = startDt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase();
+    } else {
+      monthLabel = `${startStr.toUpperCase()} – ${endStr.toUpperCase()}`;
+    }
+  }
 
   return {
     classId,
     headerBanner,
     monthLabel,
+    startDate,
+    endDate,
     dateColumns,
     students: studentRows,
     totalClassWorkingHours: totalClassWorking,
@@ -205,145 +238,123 @@ export async function generateMonthlyMatrix(
 }
 
 /**
- * Export the Period Matrix Grid as an authentic formatted College Attendance Register in Excel (.xlsx)
+ * Compute monthly matrix (Single month backward compatibility).
+ */
+export async function generateMonthlyMatrix(
+  classId: ClassId,
+  yearMonth: string, // "2026-08"
+  onlyMarkedDates = false
+): Promise<MonthlyMatrixData> {
+  const [y, m] = yearMonth.split('-');
+  const daysInMonth = new Date(parseInt(y, 10), parseInt(m, 10), 0).getDate();
+  const startDate = `${yearMonth}-01`;
+  const endDate = `${yearMonth}-${String(daysInMonth).padStart(2, '0')}`;
+
+  const monthDate = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
+  const label = monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase();
+
+  return generateDateRangeMatrix(classId, startDate, endDate, onlyMarkedDates, label);
+}
+
+/**
+ * Export Monthly / Multi-Month Matrix to formatted Excel (.xlsx) file.
  */
 export function exportMonthlyMatrixExcel(
   data: MonthlyMatrixData,
-  displayTickMark = true
+  useTickMark = true
 ): void {
-  const wb = XLSX.utils.book_new();
+  const rows: (string | number)[][] = [];
 
-  // Construct AoA (Array of Arrays) for multi-level merged headers
-  const aoa: any[][] = [];
+  // Row 1: University Banner
+  rows.push(["ST. PETER'S INSTITUTE OF HIGHER EDUCATION AND RESEARCH"]);
+  // Row 2: Department & Academic Year
+  rows.push([data.headerBanner]);
+  // Row 3: Month / Date Range
+  rows.push([`ATTENDANCE REGISTER: ${data.monthLabel}`]);
+  // Row 4: Empty separator
+  rows.push([]);
 
-  // Row 1: Title Banner
-  aoa.push([`${data.headerBanner} - ${data.monthLabel}`]);
-
-  // Row 2: Header Level 1 (Date Spans)
-  const row2: any[] = ['No', 'Reg No', 'Student Name'];
+  // Row 5: Header Level 1 (Date Spans)
+  const headerL1: (string | number)[] = ['S.No', 'Register No', 'Student Name'];
   for (const col of data.dateColumns) {
-    row2.push(col.dayMonthLabel);
+    const dayLabel = `${col.dayMonthLabel} (${col.dayOfWeek})`;
+    headerL1.push(dayLabel);
     for (let p = 2; p <= 7; p++) {
-      row2.push(''); // placeholder for horizontal merge
+      headerL1.push(''); // placeholder for merge
     }
   }
-  row2.push('TOTAL HOURS PRESENT', 'WORKING HOURS', 'OD HOURS', 'ABSENT HOURS', 'ATTENDANCE %');
-  aoa.push(row2);
+  headerL1.push('Total Present', 'Working Hours', 'On Duty (OD)', 'Absent', 'Attendance %');
+  rows.push(headerL1);
 
-  // Row 3: Header Level 2 (Periods 1..7)
-  const row3: any[] = ['', '', ''];
-  for (const _col of data.dateColumns) {
+  // Row 6: Header Level 2 (Periods 1..7)
+  const headerL2: (string | number)[] = ['', '', ''];
+  for (let i = 0; i < data.dateColumns.length; i++) {
     for (let p = 1; p <= 7; p++) {
-      row3.push(p);
+      headerL2.push(p);
     }
   }
-  row3.push('', '', '', '', '');
-  aoa.push(row3);
+  headerL2.push('', '', '', '', '');
+  rows.push(headerL2);
 
-  // Rows 4+: Student Rows
+  // Student Rows
   for (const s of data.students) {
-    const row: any[] = [s.sNo, s.regNo, s.studentName];
+    const rowData: (string | number)[] = [s.sNo, s.regNo, s.studentName];
 
     for (const col of data.dateColumns) {
       for (let p = 1; p <= 7; p++) {
         const mark = s.marks[`${col.dateStr}_${p}`];
         if (mark === 'P') {
-          row.push(displayTickMark ? '✓' : 'P');
+          rowData.push(useTickMark ? '✓' : 'P');
         } else if (mark === 'A') {
-          row.push('A');
+          rowData.push('A');
         } else if (mark === 'OD') {
-          row.push('OD');
+          rowData.push('OD');
         } else {
-          row.push('—');
+          rowData.push(col.isHoliday ? 'H' : '-');
         }
       }
     }
 
-    const presentWithOD = s.totalPresent + s.totalOD;
-    row.push(
-      presentWithOD,
-      s.totalWorking,
-      s.totalOD,
-      s.totalAbsent,
-      s.totalWorking > 0 ? `${s.percentage.toFixed(1)}%` : '—'
-    );
-    aoa.push(row);
+    rowData.push(s.totalPresent, s.totalWorking, s.totalOD, s.totalAbsent, `${s.percentage}%`);
+    rows.push(rowData);
   }
 
-  // Bottom Summary Row
-  const bottomRow: any[] = ['', '', 'TOTAL PRESENT / PERIOD'];
-  for (const col of data.dateColumns) {
-    for (let p = 1; p <= 7; p++) {
-      let periodPresentCount = 0;
-      for (const s of data.students) {
-        const mark = s.marks[`${col.dateStr}_${p}`];
-        if (mark === 'P' || mark === 'OD') periodPresentCount++;
-      }
-      bottomRow.push(periodPresentCount);
-    }
+  // Row: Class Averages
+  const summaryRow: (string | number)[] = ['TOTAL', '', 'CLASS TOTALS / AVERAGE'];
+  for (let i = 0; i < data.dateColumns.length * 7; i++) {
+    summaryRow.push('');
   }
-  bottomRow.push(
-    data.totalClassPresentHours + data.totalClassODHours,
+  summaryRow.push(
+    data.totalClassPresentHours,
     data.totalClassWorkingHours,
     data.totalClassODHours,
     data.totalClassAbsentHours,
-    `${data.classAveragePercentage.toFixed(1)}%`
+    `${data.classAveragePercentage}%`
   );
-  aoa.push(bottomRow);
+  rows.push(summaryRow);
 
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  // Create Worksheet
+  const ws = XLSX.utils.aoa_to_sheet(rows);
 
-  // Define Merges
-  const merges: XLSX.Range[] = [];
-
-  // Merge Title Banner across all columns (Row 0)
-  const totalCols = 3 + data.dateColumns.length * 7 + 5;
-  merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: totalCols - 1 } });
-
-  // Merge Leading Columns vertically (Rows 1-2)
-  merges.push({ s: { r: 1, c: 0 }, e: { r: 2, c: 0 } }); // No
-  merges.push({ s: { r: 1, c: 1 }, e: { r: 2, c: 1 } }); // Reg No
-  merges.push({ s: { r: 1, c: 2 }, e: { r: 2, c: 2 } }); // Student Name
-
-  // Merge Date Columns horizontally across 7 periods (Row 1)
-  let colIndex = 3;
-  for (let i = 0; i < data.dateColumns.length; i++) {
-    merges.push({ s: { r: 1, c: colIndex }, e: { r: 1, c: colIndex + 6 } });
-    colIndex += 7;
-  }
-
-  // Merge Trailing Summary Columns vertically (Rows 1-2)
-  merges.push({ s: { r: 1, c: colIndex }, e: { r: 2, c: colIndex } });     // Total Hours Present
-  merges.push({ s: { r: 1, c: colIndex + 1 }, e: { r: 2, c: colIndex + 1 } }); // Working Hours
-  merges.push({ s: { r: 1, c: colIndex + 2 }, e: { r: 2, c: colIndex + 2 } }); // OD Hours
-  merges.push({ s: { r: 1, c: colIndex + 3 }, e: { r: 2, c: colIndex + 3 } }); // Absent Hours
-  merges.push({ s: { r: 1, c: colIndex + 4 }, e: { r: 2, c: colIndex + 4 } }); // Attendance %
-
-  ws['!merges'] = merges;
-
-  // Set Column Widths
-  const colWidths: XLSX.ColInfo[] = [
-    { wch: 6 },  // No
+  // Configure column widths
+  const colWidths: { wch: number }[] = [
+    { wch: 6 },  // S.No
     { wch: 15 }, // Reg No
-    { wch: 24 }, // Student Name
+    { wch: 26 }, // Student Name
   ];
 
   for (let i = 0; i < data.dateColumns.length * 7; i++) {
-    colWidths.push({ wch: 4 }); // Period columns
+    colWidths.push({ wch: 4 });
   }
 
-  colWidths.push(
-    { wch: 22 }, // Total Hours Present
-    { wch: 16 }, // Working Hours
-    { wch: 12 }, // OD Hours
-    { wch: 14 }, // Absent Hours
-    { wch: 15 }  // Attendance %
-  );
-
+  colWidths.push({ wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 14 });
   ws['!cols'] = colWidths;
 
-  XLSX.utils.book_append_sheet(wb, ws, `${data.monthLabel.slice(0, 15)} Register`);
+  // Create Workbook & Save
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Register');
 
-  const fileName = `${data.classId}_Attendance_Register_${data.monthLabel.replace(/\s+/g, '_')}.xlsx`;
-  XLSX.writeFile(wb, fileName);
+  const cleanLabel = data.monthLabel.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const filename = `SPIHER_${data.classId}_Attendance_Register_${cleanLabel}.xlsx`;
+  XLSX.writeFile(wb, filename);
 }

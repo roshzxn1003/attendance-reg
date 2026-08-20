@@ -18,7 +18,7 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import { Student } from '../../services/studentService';
-import { ClassId } from '../../types';
+import { ClassId, StudentAttendanceSummary } from '../../types';
 import { useMonthlyAttendance } from '../../hooks/useMonthlyAttendance';
 import { generateFullAttendanceReport } from '../../services/fullReportService';
 import { exportAttendanceToExcel, exportAttendanceToCSV } from '../../lib/exportUtils';
@@ -82,8 +82,8 @@ export const MonthlyAttendanceView: React.FC<MonthlyAttendanceViewProps> = ({
   const filteredAndSorted = useMemo(() => {
     const q = search.toLowerCase().trim();
 
-    return monthlySummaries
-      .filter((s) => {
+    return (monthlySummaries as StudentAttendanceSummary[])
+      .filter((s: StudentAttendanceSummary) => {
         const matchSearch =
           !q ||
           s.student_id.toLowerCase().includes(q) ||
@@ -97,7 +97,7 @@ export const MonthlyAttendanceView: React.FC<MonthlyAttendanceViewProps> = ({
 
         return matchSearch && matchFilter;
       })
-      .sort((a, b) => {
+      .sort((a: StudentAttendanceSummary, b: StudentAttendanceSummary) => {
         let valA = a[sortKey];
         let valB = b[sortKey];
 
@@ -147,8 +147,8 @@ export const MonthlyAttendanceView: React.FC<MonthlyAttendanceViewProps> = ({
     }
   };
 
-  const lowCount = monthlySummaries.filter((s) => s.totalWorkingHours > 0 && s.percentage < 75).length;
-  const criticalCount = monthlySummaries.filter((s) => s.totalWorkingHours > 0 && s.percentage < 65).length;
+  const lowCount = (monthlySummaries as StudentAttendanceSummary[]).filter((s: StudentAttendanceSummary) => s.totalWorkingHours > 0 && s.percentage < 75).length;
+  const criticalCount = (monthlySummaries as StudentAttendanceSummary[]).filter((s: StudentAttendanceSummary) => s.totalWorkingHours > 0 && s.percentage < 65).length;
 
   const SortIcon = ({ col }: { col: SortKey }) => {
     if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300" />;
@@ -527,7 +527,7 @@ export const MonthlyAttendanceView: React.FC<MonthlyAttendanceViewProps> = ({
                     </td>
                   </tr>
                 ) : (
-                  filteredAndSorted.map((s, idx) => {
+                  filteredAndSorted.map((s: StudentAttendanceSummary, idx: number) => {
                     const studentObj = studentMap.get(s.student_id);
 
                     return (
