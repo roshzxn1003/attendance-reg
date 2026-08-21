@@ -3,8 +3,8 @@ import { ClassInfo } from '../types';
 export const CLASSES: Record<string, ClassInfo> = {
   'CSE-25': {
     id: 'CSE-25',
-    name: 'BE Computer Science Engineering',
-    degree: 'B.E.',
+    name: 'BTech Computer Science Engineering',
+    degree: 'B.Tech.',
     branch: 'Computer Science and Engineering',
     batch: '2025-2029 (Year II)',
     semester: 'Semester III',

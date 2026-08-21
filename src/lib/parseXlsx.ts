@@ -9,7 +9,7 @@
  *   Col 1  → Name                      e.g. ARUN ROSHAN GJ
  *   Col 2  → Institution               SPIHER  (ignored)
  *   Col 3  → Dept short                Computer Science Engineering / AIDS (ignored, use col 4)
- *   Col 4  → Degree program            "BE Computer Science Engineering" / "BTech AIDS"
+ *   Col 4  → Degree program            "BTech Computer Science Engineering" / "BTech AIDS"
  *   Col 5  → Batch year                2025  (ignored)
  *   Col 6-8 → Gaps/Nones for some rows
  *   Col 9 or 6 → Category             GENERAL  (ignored)

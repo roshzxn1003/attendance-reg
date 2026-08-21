@@ -64,7 +64,7 @@ Designed for **Year II / Semester III (Class Room 245)** supporting **B.Tech CSE
 
 | Class ID | Program Name | Batch | Semester | Classroom | Enrolled |
 |---|---|---|---|---|---|
-| **`CSE-25`** | B.E. Computer Science and Engineering | 2025–2029 (Year II) | Semester III | Room 245 | 44 Students (`SPC25CSU001` – `044`) |
+| **`CSE-25`** | B.Tech Computer Science and Engineering | 2025–2029 (Year II) | Semester III | Room 245 | 44 Students (`SPC25CSU001` – `044`) |
 | **`AIDS-25`** | B.Tech Artificial Intelligence & Data Science | 2025–2029 (Year II) | Semester III | Room 245 | 16 Students (`SPC25CSU601` – `616`) |
 
 ### Daily Period Schedule (Room 245)

@@ -50,7 +50,7 @@ export const router = createBrowserRouter([
   {
     path: '/student-portal',
     element: (
-      <ProtectedRoute allowedRoles={['student', 'cr', 'admin']}>
+      <ProtectedRoute allowedRoles={['student', 'admin']}>
         <AppLayout>
           <StudentPortalPage />
         </AppLayout>

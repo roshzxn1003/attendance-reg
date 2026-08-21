@@ -13,6 +13,8 @@ import { DailyAttendanceOverview } from '../../services/attendanceService';
 import { PERIOD_TIMINGS } from '../../data/timetable';
 import { Card, CardContent } from '../common/Card';
 import { Badge } from '../common/Badge';
+import { Button } from '../common/Button';
+import { MessageCircle } from 'lucide-react';
 import { cn, formatDate } from '../../lib/utils';
 
 interface DailyAttendanceOverviewCardProps {
@@ -25,6 +27,7 @@ interface DailyAttendanceOverviewCardProps {
   holidayReason?: string | null;
   onSelectPeriod: (p: PeriodNumber) => void;
   selectedPeriods: PeriodNumber[];
+  onShareClick?: () => void;
 }
 
 export const DailyAttendanceOverviewCard: React.FC<DailyAttendanceOverviewCardProps> = ({
@@ -37,6 +40,7 @@ export const DailyAttendanceOverviewCard: React.FC<DailyAttendanceOverviewCardPr
   holidayReason,
   onSelectPeriod,
   selectedPeriods,
+  onShareClick,
 }) => {
   if (isHoliday) {
     return (
@@ -89,18 +93,34 @@ export const DailyAttendanceOverviewCard: React.FC<DailyAttendanceOverviewCardPr
             </div>
           </div>
 
-          {/* Periods Completed Badge */}
-          <div className="flex items-center gap-2 self-start sm:self-auto bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 text-xs">
-            <span className="text-slate-500 font-medium">Periods Completed:</span>
-            <span className="font-mono font-bold text-slate-900">
-              {overview.periodsCompleted} / {overview.totalPeriods}
-            </span>
-            <div className="w-16 h-2 bg-slate-200 rounded-full overflow-hidden ml-1">
-              <div
-                className="h-full bg-blue-600 rounded-full transition-all duration-300"
-                style={{ width: `${completionPercent}%` }}
-              />
+          <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+            {/* Periods Completed Badge */}
+            <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 text-xs">
+              <span className="text-slate-500 font-medium">Periods Completed:</span>
+              <span className="font-mono font-bold text-slate-900">
+                {overview.periodsCompleted} / {overview.totalPeriods}
+              </span>
+              <div className="w-16 h-2 bg-slate-200 rounded-full overflow-hidden ml-1">
+                <div
+                  className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                  style={{ width: `${completionPercent}%` }}
+                />
+              </div>
             </div>
+
+            {/* Share Daily Report Button */}
+            {onShareClick && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onShareClick}
+                className="gap-1.5 bg-emerald-50/70 hover:bg-emerald-100/80 text-emerald-800 border-emerald-300 font-bold text-xs rounded-xl shadow-2xs py-1.5 cursor-pointer"
+                title="Generate & share formatted daily attendance report"
+              >
+                <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Share Day Report</span>
+              </Button>
+            )}
           </div>
         </div>
 

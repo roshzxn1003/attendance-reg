@@ -22,6 +22,7 @@ import { DayCycleSetupCard } from '../components/daycycle/DayCycleSetupCard';
 import { AttendanceMarkingGrid } from '../components/attendance/AttendanceMarkingGrid';
 import { DailyAttendanceOverviewCard } from '../components/attendance/DailyAttendanceOverviewCard';
 import { StudentAttendanceSummaryTable } from '../components/attendance/StudentAttendanceSummaryTable';
+import { AttendanceSummaryShareModal } from '../components/attendance/AttendanceSummaryShareModal';
 import { useDayCycle } from '../hooks/useDayCycle';
 import { useTimetable } from '../hooks/useTimetable';
 import { useStudents } from '../hooks/useStudents';
@@ -35,6 +36,7 @@ export const AttendancePage: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<string>(getTodayDateString());
   const [selectedPeriods, setSelectedPeriods] = useState<PeriodNumber[]>([1]);
   const [activeView, setActiveView] = useState<ActiveViewMode>('marking');
+  const [isDailyShareModalOpen, setIsDailyShareModalOpen] = useState(false);
 
   // Day Cycle Hook for active date & class
   const {
@@ -183,6 +185,7 @@ export const AttendancePage: React.FC = () => {
             holidayReason={currentEntry?.holiday_reason}
             onSelectPeriod={(p) => togglePeriod(p)}
             selectedPeriods={selectedPeriods}
+            onShareClick={() => setIsDailyShareModalOpen(true)}
           />
 
           {/* Navigation View Switcher (Marking vs Summary Table) */}
@@ -426,6 +429,21 @@ export const AttendancePage: React.FC = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* ── Daily Summary Share Modal ── */}
+      <AttendanceSummaryShareModal
+        isOpen={isDailyShareModalOpen}
+        onClose={() => setIsDailyShareModalOpen(false)}
+        classId={selectedClass.id}
+        classNameTitle={selectedClass.name}
+        date={selectedDate}
+        dayOrderNumber={activeDayNumber}
+        selectedPeriods={selectedPeriods}
+        subject={compositeSubject}
+        students={students}
+        todaySummaries={todaySummaries}
+        dailyOverview={dailyOverview}
+      />
     </div>
   );
 };
