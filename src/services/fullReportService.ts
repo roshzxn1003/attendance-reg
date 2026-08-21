@@ -60,8 +60,9 @@ export async function generateFullAttendanceReport(
 }> {
   // 1. Fetch active students for this class
   const classStudents = await fetchStudents(classId);
+  const activeStudents = classStudents.filter((s) => s.active !== false);
   const studentMap = new Map<string, Student>();
-  for (const s of classStudents) {
+  for (const s of activeStudents) {
     studentMap.set(s.student_id, s);
   }
   const studentIds = Array.from(studentMap.keys());

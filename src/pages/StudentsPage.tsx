@@ -21,15 +21,16 @@ export const StudentsPage: React.FC = () => {
 
   // Load students for active class
   const { students, loading: studentsLoading } = useStudents(selectedClass.id);
+  const activeStudents = React.useMemo(() => students.filter((s) => s.active), [students]);
 
   // Load attendance calculations for active class
   const { cumulativeSummaries, loading: dashLoading } = useAttendanceDashboard(
     selectedClass.id,
     getTodayDateString(),
-    students
+    activeStudents
   );
 
-  const activeCount = students.filter((s) => s.active).length;
+  const activeCount = activeStudents.length;
 
   return (
     <div className="space-y-6 pb-12">
@@ -107,7 +108,7 @@ export const StudentsPage: React.FC = () => {
             <MonthlyPeriodRegisterGrid
               classId={selectedClass.id}
               classNameTitle={selectedClass.name}
-              students={students}
+              students={activeStudents}
               onSelectStudent={(student) => setSelectedStudent(student)}
             />
           )}
@@ -117,7 +118,7 @@ export const StudentsPage: React.FC = () => {
             <MonthlyAttendanceView
               classId={selectedClass.id}
               classNameTitle={selectedClass.name}
-              students={students}
+              students={activeStudents}
               onSelectStudent={(student) => setSelectedStudent(student)}
             />
           )}
@@ -127,7 +128,7 @@ export const StudentsPage: React.FC = () => {
             <FullAttendanceReportView
               classId={selectedClass.id}
               classNameTitle={selectedClass.name}
-              students={students}
+              students={activeStudents}
               onSelectStudent={(student) => setSelectedStudent(student)}
             />
           )}

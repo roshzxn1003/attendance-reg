@@ -333,11 +333,14 @@ export function calculateAttendanceStats(
 
 /**
  * Calculate dynamic student-level attendance summaries from raw attendance items
+ * Inactive students are strictly excluded.
  */
 export function calculateStudentSummaries(
   students: Student[],
   attendanceRecords: AttendanceItem[]
 ): StudentAttendanceSummary[] {
+  const activeStudents = students.filter((s) => s.active !== false);
+
   // Index records by student_id
   const recordsByStudent: Record<string, AttendanceItem[]> = {};
   for (const r of attendanceRecords) {
@@ -347,7 +350,7 @@ export function calculateStudentSummaries(
     recordsByStudent[r.student_id].push(r);
   }
 
-  return students.map((s) => {
+  return activeStudents.map((s) => {
     const studentRecords = recordsByStudent[s.student_id] || [];
 
     let presentHours = 0;

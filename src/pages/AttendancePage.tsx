@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Card, CardContent } from '../components/common/Card';
 import { useApp } from '../context/AppContext';
@@ -52,8 +52,9 @@ export const AttendancePage: React.FC = () => {
   // Timetable Hook for active class
   const { entries: timetableEntries } = useTimetable(selectedClass.id);
 
-  // Students Hook for active class
+  // Students Hook for active class (strictly filter to active students)
   const { students } = useStudents(selectedClass.id);
+  const activeStudents = useMemo(() => students.filter((s) => s.active), [students]);
 
   // Step 7 Attendance Dashboard & Calculations Hook
   const {
@@ -61,7 +62,7 @@ export const AttendancePage: React.FC = () => {
     todaySummaries,
     cumulativeSummaries,
     reload: reloadDashboard,
-  } = useAttendanceDashboard(selectedClass.id, selectedDate, students);
+  } = useAttendanceDashboard(selectedClass.id, selectedDate, activeStudents);
 
   const isAssigned = currentEntry !== null;
   const isHoliday = currentEntry?.is_holiday === true;
@@ -376,7 +377,7 @@ export const AttendancePage: React.FC = () => {
                 dayOrderNumber={activeDayNumber}
                 subject={compositeSubject}
                 timeRange={compositeTiming}
-                students={students}
+                students={activeStudents}
                 onSaveSuccess={reloadDashboard}
               />
             </div>
@@ -440,7 +441,7 @@ export const AttendancePage: React.FC = () => {
         dayOrderNumber={activeDayNumber}
         selectedPeriods={selectedPeriods}
         subject={compositeSubject}
-        students={students}
+        students={activeStudents}
         todaySummaries={todaySummaries}
         dailyOverview={dailyOverview}
       />
