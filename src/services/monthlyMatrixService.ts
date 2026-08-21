@@ -283,7 +283,7 @@ export function exportMonthlyMatrixExcel(
       headerL1.push(''); // placeholder for merge
     }
   }
-  headerL1.push('Total Present', 'Working Hours', 'On Duty (OD)', 'Absent', 'Attendance %');
+  headerL1.push('Working Hours', 'Total Present', 'On Duty (OD)', 'Absent', 'Attendance %');
   rows.push(headerL1);
 
   // Row 6: Header Level 2 (Periods 1..7)
@@ -315,7 +315,7 @@ export function exportMonthlyMatrixExcel(
       }
     }
 
-    rowData.push(s.totalPresent, s.totalWorking, s.totalOD, s.totalAbsent, `${s.percentage}%`);
+    rowData.push(s.totalWorking, s.totalPresent, s.totalOD, s.totalAbsent, `${s.percentage}%`);
     rows.push(rowData);
   }
 
@@ -325,8 +325,8 @@ export function exportMonthlyMatrixExcel(
     summaryRow.push('');
   }
   summaryRow.push(
-    data.totalClassPresentHours,
     data.totalClassWorkingHours,
+    data.totalClassPresentHours,
     data.totalClassODHours,
     data.totalClassAbsentHours,
     `${data.classAveragePercentage}%`

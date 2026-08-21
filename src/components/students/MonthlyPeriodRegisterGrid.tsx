@@ -597,20 +597,20 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                   <th
                     rowSpan={2}
                     className={cn(
-                      'py-2.5 px-2.5 w-[88px] min-w-[88px] max-w-[88px] border-l-2 border-r border-slate-300 bg-emerald-100 text-emerald-950 font-black text-[10px] tracking-tight leading-tight',
-                      lockRightTotals && 'sticky right-[244px] z-40 shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)]'
+                      'py-2.5 px-2 w-[64px] min-w-[64px] max-w-[64px] border-l-2 border-r border-slate-300 bg-slate-200 text-slate-800 font-bold text-[10px]',
+                      lockRightTotals && 'sticky right-[268px] z-40 shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)]'
                     )}
                   >
-                    TOTAL PRESENT
+                    WORKING
                   </th>
                   <th
                     rowSpan={2}
                     className={cn(
-                      'py-2.5 px-2 w-[64px] min-w-[64px] max-w-[64px] border-r border-slate-300 bg-slate-200 text-slate-800 font-bold text-[10px]',
+                      'py-2.5 px-2.5 w-[88px] min-w-[88px] max-w-[88px] border-r border-slate-300 bg-emerald-100 text-emerald-950 font-black text-[10px] tracking-tight leading-tight',
                       lockRightTotals && 'sticky right-[180px] z-40'
                     )}
                   >
-                    WORKING
+                    TOTAL PRESENT
                   </th>
                   <th
                     rowSpan={2}
@@ -756,24 +756,24 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                         ))}
 
                         {/* ── 5. Sticky Locked Totals on the Right Side ── */}
-                        {/* Present Hours */}
-                        <td
-                          className={cn(
-                            'py-1.5 px-2.5 w-[88px] min-w-[88px] max-w-[88px] font-black font-mono text-emerald-950 bg-emerald-50/90 border-l-2 border-r border-slate-300 text-center text-xs group-hover:bg-emerald-100',
-                            lockRightTotals && 'sticky right-[244px] z-20 shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)]'
-                          )}
-                        >
-                          {s.totalPresent}
-                        </td>
-
                         {/* Working Hours */}
                         <td
                           className={cn(
-                            'py-1.5 px-2 w-[64px] min-w-[64px] max-w-[64px] font-mono font-bold text-slate-700 bg-slate-100/90 border-r border-slate-200 text-center text-xs group-hover:bg-slate-200',
-                            lockRightTotals && 'sticky right-[180px] z-20'
+                            'py-1.5 px-2 w-[64px] min-w-[64px] max-w-[64px] font-mono font-bold text-slate-700 bg-slate-100/90 border-l-2 border-r border-slate-300 text-center text-xs group-hover:bg-slate-200',
+                            lockRightTotals && 'sticky right-[268px] z-20 shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)]'
                           )}
                         >
                           {s.totalWorking}
+                        </td>
+
+                        {/* Present Hours */}
+                        <td
+                          className={cn(
+                            'py-1.5 px-2.5 w-[88px] min-w-[88px] max-w-[88px] font-black font-mono text-emerald-950 bg-emerald-50/90 border-r border-slate-300 text-center text-xs group-hover:bg-emerald-100',
+                            lockRightTotals && 'sticky right-[180px] z-20'
+                          )}
+                        >
+                          {s.totalPresent}
                         </td>
 
                         {/* OD Hours */}
