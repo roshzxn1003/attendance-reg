@@ -18,6 +18,7 @@ import {
   Users,
   Check,
   X,
+  CloudUpload,
 } from 'lucide-react';
 import { ClassId } from '../../types';
 import {
@@ -33,6 +34,7 @@ import {
   importFullDatabaseBackup,
   executeFullFactoryReset,
 } from '../../services/adminSettingsService';
+import { syncLocalAttendanceToCloud, getLocalAttendanceCount } from '../../services/attendanceService';
 import { useToast } from '../../context/ToastContext';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../common/Card';
 import { Button } from '../common/Button';
@@ -220,6 +222,27 @@ export const AdminSettingsTab: React.FC<AdminSettingsTabProps> = ({
       if (onRefreshParent) onRefreshParent();
     } catch (err) {
       toast.error(String(err), 'Reset Failed');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Sync Local Records to Cloud
+  const handleSyncToCloud = async () => {
+    setActionLoading('cloud_sync');
+    try {
+      const res = await syncLocalAttendanceToCloud();
+      if (res.error) {
+        toast.error(res.error, 'Sync Failed');
+      } else if (res.syncedCount === 0) {
+        toast.info('All local attendance records are already synced with Supabase!', 'Fully Synced');
+      } else {
+        toast.success(`Successfully uploaded and synced ${res.syncedCount} attendance records to Supabase Cloud!`, 'Cloud Sync Complete');
+      }
+      loadDiagnostics();
+      if (onRefreshParent) onRefreshParent();
+    } catch (err) {
+      toast.error(String(err), 'Sync Error');
     } finally {
       setActionLoading(null);
     }
@@ -521,6 +544,34 @@ export const AdminSettingsTab: React.FC<AdminSettingsTabProps> = ({
                   <span>Upload & Restore Backup (.json)</span>
                 </Button>
               </div>
+            </div>
+
+            {/* Sync Local Storage to Cloud */}
+            <div className="p-4 bg-emerald-50/50 border border-emerald-200 rounded-2xl flex flex-col justify-between gap-3 sm:col-span-2">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-xs font-black text-emerald-950 flex items-center gap-1.5">
+                    <CloudUpload className="w-4 h-4 text-emerald-600" />
+                    <span>Sync Offline Records to Supabase Cloud</span>
+                  </h4>
+                  <p className="text-[11px] text-emerald-800 mt-1">
+                    Uploads any attendance records saved in your browser's local cache directly into the Supabase Cloud database so they sync across all mobile devices and student dashboards.
+                  </p>
+                </div>
+                <Badge variant="success" size="sm" className="font-bold shrink-0">
+                  {getLocalAttendanceCount()} in local cache
+                </Badge>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSyncToCloud}
+                isLoading={actionLoading === 'cloud_sync'}
+                className="bg-white hover:bg-emerald-100 text-emerald-800 border-emerald-300 font-black text-xs gap-1.5 rounded-xl cursor-pointer"
+              >
+                <CloudUpload className="w-3.5 h-3.5" />
+                <span>Upload & Sync All Local Records to Cloud</span>
+              </Button>
             </div>
           </div>
         </CardContent>

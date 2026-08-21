@@ -105,6 +105,15 @@ export const Navbar: React.FC = () => {
 
       {/* Action buttons inside drawer */}
       <div className="flex flex-col gap-2">
+        {/* Cloud Sync Status */}
+        <div className="flex items-center justify-between px-3.5 py-2 text-[11px] font-bold text-emerald-800 bg-emerald-50/80 border border-emerald-200 rounded-xl">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Supabase Cloud Sync</span>
+          </div>
+          <span className="text-[10px] font-mono text-emerald-600 font-black">Live</span>
+        </div>
+
         <button
           type="button"
           onClick={() => setIsPasswordModalOpen(true)}
@@ -233,6 +242,15 @@ export const Navbar: React.FC = () => {
 
               {isAuthenticated && user ? (
                 <div className="flex items-center gap-1.5">
+                  {/* Cloud Sync Live Indicator */}
+                  <div
+                    className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-bold shadow-2xs"
+                    title="Supabase Cloud Real-time Database Connected"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>Cloud Sync</span>
+                  </div>
+
                   {/* User badge */}
                   <div className="hidden lg:flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
                     <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">

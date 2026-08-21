@@ -77,13 +77,16 @@ export async function fetchPeriodAttendance(
         .eq('date', date)
         .eq('period_number', periodNumber);
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         const records = data as AttendanceItem[];
-        const lastMarkedAt = records[0]?.marked_at;
-        return { records, exists: true, lastMarkedAt };
+        if (records.length > 0) {
+          const lastMarkedAt = records[0]?.marked_at;
+          return { records, exists: true, lastMarkedAt };
+        }
+        return { records: [], exists: false };
       }
     } catch {
-      // fallback below
+      // fallback to local below if network error
     }
   }
 
@@ -417,3 +420,41 @@ export function calculateDailyOverview(
     completedPeriodNumbers,
   };
 }
+
+/**
+ * Get count of attendance records stored in local storage
+ */
+export function getLocalAttendanceCount(): number {
+  return getLocalAttendance().length;
+}
+
+/**
+ * Upload all local storage attendance records to Supabase Cloud database
+ */
+export async function syncLocalAttendanceToCloud(): Promise<{ syncedCount: number; error?: string }> {
+  if (!isSupabaseConfigured()) {
+    return { syncedCount: 0, error: 'Supabase credentials are not configured.' };
+  }
+
+  const local = getLocalAttendance();
+  if (local.length === 0) {
+    return { syncedCount: 0 };
+  }
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    const { error } = await sb
+      .from('attendance')
+      .upsert(local, { onConflict: 'student_id,date,period_number' });
+
+    if (error) {
+      return { syncedCount: 0, error: error.message };
+    }
+
+    return { syncedCount: local.length };
+  } catch (err) {
+    return { syncedCount: 0, error: String(err) };
+  }
+}
+
