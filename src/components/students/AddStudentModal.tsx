@@ -134,7 +134,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
             <input
               type="text"
               required
-              placeholder="e.g. ABU BUHARI I"
+              placeholder="ENTER STUDENT FULL NAME"
               value={name}
               onChange={(e) => setName(e.target.value.toUpperCase())}
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
@@ -148,7 +148,7 @@ export const AddStudentModal: React.FC<AddStudentModalProps> = ({
             </label>
             <input
               type="email"
-              placeholder="e.g. abu.cse25@spiher.ac.in"
+              placeholder="student@spiher.ac.in"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20"

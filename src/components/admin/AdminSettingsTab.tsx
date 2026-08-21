@@ -250,7 +250,7 @@ export const AdminSettingsTab: React.FC<AdminSettingsTabProps> = ({
 
   // 7. Restore Master Roster
   const handleRestoreMaster = async () => {
-    if (!window.confirm(`Restore official SPIHER master student roster for ${selectedClassId}? Any added temporary test students will be reset.`)) {
+    if (!window.confirm(`Restore official SPIHER master student roster for ${selectedClassId}? Any newly added unverified students will be reset.`)) {
       return;
     }
 

@@ -191,10 +191,10 @@ export const LoginPage: React.FC = () => {
                     required
                     placeholder={
                       activePortal === 'student'
-                        ? 'e.g. arunroshangj25.cse@spiher.ac.in or SPC25CSU003'
+                        ? 'Enter Roll Number (e.g. SPC25CSU001) or Email'
                         : activePortal === 'cr'
-                        ? 'e.g. cr.cse25@spiher.ac.in or cr'
-                        : 'e.g. admin@spiher.ac.in or admin'
+                        ? 'Enter CR Email or Username'
+                        : 'Enter Admin Email or Username'
                     }
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
@@ -213,7 +213,7 @@ export const LoginPage: React.FC = () => {
                   <input
                     type="password"
                     required
-                    placeholder="Enter password…"
+                    placeholder="Enter password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 font-mono"
