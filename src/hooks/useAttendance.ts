@@ -38,6 +38,7 @@ export function useAttendance(
 
   // Active students only
   const activeStudents = useMemo(() => students.filter((s) => s.active), [students]);
+  const activeStudentIds = useMemo(() => activeStudents.map((s) => s.student_id), [activeStudents]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,7 +48,8 @@ export function useAttendance(
       const { records, exists, lastMarkedAt: savedTime } = await fetchPeriodAttendance(
         classId,
         date,
-        primaryPeriod
+        primaryPeriod,
+        activeStudentIds
       );
 
       setIsAlreadySaved(exists);
@@ -68,7 +70,7 @@ export function useAttendance(
     } finally {
       setLoading(false);
     }
-  }, [classId, date, primaryPeriod]);
+  }, [classId, date, primaryPeriod, activeStudentIds]);
 
   useEffect(() => {
     load();

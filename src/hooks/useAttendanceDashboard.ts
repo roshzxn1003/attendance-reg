@@ -29,7 +29,7 @@ export function useAttendanceDashboard(
       const studentIds = activeStudents.map((s) => s.student_id);
 
       // 1. Fetch records for selected date
-      const dateData = await fetchDateAttendance(classId, selectedDate);
+      const dateData = await fetchDateAttendance(classId, selectedDate, studentIds);
       setDateRecords(dateData);
 
       // 2. Fetch all historical records for this class

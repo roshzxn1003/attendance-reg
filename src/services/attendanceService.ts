@@ -61,21 +61,29 @@ function saveLocalAttendance(records: AttendanceItem[]) {
 
 /**
  * Fetch existing attendance records for a specific class, date, and period.
+ * Scoped to studentIds to ensure accurate per-class state.
  */
 export async function fetchPeriodAttendance(
-  _classId: ClassId,
+  classId: ClassId,
   date: string,
-  periodNumber: PeriodNumber
+  periodNumber: PeriodNumber,
+  studentIds?: string[]
 ): Promise<{ records: AttendanceItem[]; exists: boolean; lastMarkedAt?: string }> {
   if (isSupabaseConfigured()) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any;
-      const { data, error } = await sb
+      let query = sb
         .from('attendance')
         .select('*')
         .eq('date', date)
         .eq('period_number', periodNumber);
+
+      if (studentIds && studentIds.length > 0) {
+        query = query.in('student_id', studentIds);
+      }
+
+      const { data, error } = await query;
 
       if (!error && data) {
         const records = data as AttendanceItem[];
@@ -92,7 +100,15 @@ export async function fetchPeriodAttendance(
 
   // Local storage fallback
   const local = getLocalAttendance();
-  const matched = local.filter((r) => r.date === date && r.period_number === periodNumber);
+  let matched = local.filter((r) => r.date === date && r.period_number === periodNumber);
+  if (studentIds && studentIds.length > 0) {
+    const idSet = new Set(studentIds);
+    matched = matched.filter((r) => idSet.has(r.student_id));
+  } else if (classId === 'CSE-25') {
+    matched = matched.filter((r) => r.student_id.startsWith('SPC25CSU0'));
+  } else if (classId === 'AIDS-25') {
+    matched = matched.filter((r) => r.student_id.startsWith('SPC25CSU6'));
+  }
 
   return {
     records: matched,
@@ -105,17 +121,24 @@ export async function fetchPeriodAttendance(
  * Fetch all attendance records for a specific date across all periods.
  */
 export async function fetchDateAttendance(
-  _classId: ClassId,
-  date: string
+  classId: ClassId,
+  date: string,
+  studentIds?: string[]
 ): Promise<AttendanceItem[]> {
   if (isSupabaseConfigured()) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any;
-      const { data, error } = await sb
+      let query = sb
         .from('attendance')
         .select('*')
         .eq('date', date);
+
+      if (studentIds && studentIds.length > 0) {
+        query = query.in('student_id', studentIds);
+      }
+
+      const { data, error } = await query;
 
       if (!error && data) {
         return data as AttendanceItem[];
@@ -126,7 +149,16 @@ export async function fetchDateAttendance(
   }
 
   const local = getLocalAttendance();
-  return local.filter((r) => r.date === date);
+  let matched = local.filter((r) => r.date === date);
+  if (studentIds && studentIds.length > 0) {
+    const idSet = new Set(studentIds);
+    matched = matched.filter((r) => idSet.has(r.student_id));
+  } else if (classId === 'CSE-25') {
+    matched = matched.filter((r) => r.student_id.startsWith('SPC25CSU0'));
+  } else if (classId === 'AIDS-25') {
+    matched = matched.filter((r) => r.student_id.startsWith('SPC25CSU6'));
+  }
+  return matched;
 }
 
 /**

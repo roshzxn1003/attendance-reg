@@ -58,11 +58,17 @@ export async function getDayCycleForDate(
         .eq('date', date)
         .maybeSingle();
 
-      if (!error && data) {
-        return data as DayCycleEntry;
+      if (!error) {
+        if (data) {
+          const entry = data as DayCycleEntry;
+          const local = getLocalLogs(classId);
+          saveLocalLogs(classId, [entry, ...local.filter((l) => l.date !== date)]);
+          return entry;
+        }
+        return null;
       }
     } catch {
-      // Fallback to local storage below
+      // Fallback to local storage below if offline
     }
   }
 
