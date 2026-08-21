@@ -304,7 +304,7 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
             </div>
             <div>
               <p className="font-bold text-xs sm:text-sm text-emerald-900">
-                Attendance saved for {periodLabel}!
+                Attendance saved & synced to Supabase Cloud for {periodLabel}!
               </p>
               <p className="text-emerald-800 text-[11px]">
                 {saveSuccess.savedCount} records across {saveSuccess.periodsCount} periods • P: {saveSuccess.stats.present} • A: {saveSuccess.stats.absent} • OD: {saveSuccess.stats.od}
