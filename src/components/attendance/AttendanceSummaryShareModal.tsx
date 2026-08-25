@@ -14,7 +14,8 @@ import {
 } from 'lucide-react';
 import { ClassId, PeriodNumber, AttendanceStatus, StudentAttendanceSummary } from '../../types';
 import { Student } from '../../services/studentService';
-import { DailyAttendanceOverview } from '../../services/attendanceService';
+import { DailyAttendanceOverview, AttendanceItem } from '../../services/attendanceService';
+import { getSubjectForSlot } from '../../data/timetable';
 import { useToast } from '../../context/ToastContext';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
@@ -33,6 +34,7 @@ interface AttendanceSummaryShareModalProps {
   marks?: Record<string, AttendanceStatus | undefined>;
   todaySummaries?: StudentAttendanceSummary[];
   dailyOverview?: DailyAttendanceOverview;
+  dateRecords?: AttendanceItem[];
 }
 
 type ReportScope = 'period' | 'fullday';
@@ -51,13 +53,26 @@ export const AttendanceSummaryShareModal: React.FC<AttendanceSummaryShareModalPr
   marks = {},
   todaySummaries = [],
   dailyOverview,
+  dateRecords = [],
 }) => {
   const [scope, setScope] = useState<ReportScope>('period');
   const [format, setFormat] = useState<ReportFormat>('standard');
   const [copied, setCopied] = useState(false);
   const toast = useToast();
 
-  const activeStudents = useMemo(() => students.filter((s) => s.active), [students]);
+  const activeStudents = useMemo(() => students.filter((s) => s.active !== false), [students]);
+
+  // Group date records by student_id and period_number
+  const studentPeriodMarks = useMemo(() => {
+    const map: Record<string, Record<number, AttendanceStatus>> = {};
+    for (const rec of dateRecords) {
+      if (!map[rec.student_id]) {
+        map[rec.student_id] = {};
+      }
+      map[rec.student_id][rec.period_number] = rec.status;
+    }
+    return map;
+  }, [dateRecords]);
 
   // ── Period Calculations ──
   const periodStats = useMemo(() => {
@@ -96,18 +111,56 @@ export const AttendanceSummaryShareModal: React.FC<AttendanceSummaryShareModalPr
     if (!todaySummaries.length) return null;
 
     const fullAbsentees: { student: Student; absentHours: number }[] = [];
-    const partialAbsentees: { student: Student; absentHours: number; presentHours: number }[] = [];
+    const partialAbsentees: {
+      student: Student;
+      absentHours: number;
+      presentHours: number;
+      totalWorking: number;
+      absentPeriods: Array<{ period: PeriodNumber; subject: string }>;
+      odPeriods: Array<{ period: PeriodNumber; subject: string }>;
+    }[] = [];
+    const odStudents: {
+      student: Student;
+      odPeriods: Array<{ period: PeriodNumber; subject: string }>;
+    }[] = [];
     const fullPresentees: Student[] = [];
+
+    const completedPeriods = dailyOverview?.completedPeriodNumbers || [1, 2, 3, 4, 5, 6, 7];
 
     todaySummaries.forEach((sum) => {
       const student = activeStudents.find((s) => s.student_id === sum.student_id);
       if (!student) return;
 
+      const marksObj = studentPeriodMarks[student.student_id] || {};
+      const absentPeriods: Array<{ period: PeriodNumber; subject: string }> = [];
+      const odPeriods: Array<{ period: PeriodNumber; subject: string }> = [];
+
+      for (const p of completedPeriods) {
+        const mark = marksObj[p];
+        const subj = dayOrderNumber ? getSubjectForSlot(dayOrderNumber as any, p, classId) : `Period ${p}`;
+        if (mark === 'A') {
+          absentPeriods.push({ period: p, subject: subj });
+        } else if (mark === 'OD') {
+          odPeriods.push({ period: p, subject: subj });
+        }
+      }
+
+      if (odPeriods.length > 0) {
+        odStudents.push({ student, odPeriods });
+      }
+
       if (sum.absentHours === sum.totalWorkingHours && sum.totalWorkingHours > 0) {
         fullAbsentees.push({ student, absentHours: sum.absentHours });
       } else if (sum.absentHours > 0) {
-        partialAbsentees.push({ student, absentHours: sum.absentHours, presentHours: sum.presentHours });
-      } else if (sum.presentHours > 0) {
+        partialAbsentees.push({
+          student,
+          absentHours: sum.absentHours,
+          presentHours: sum.presentHours,
+          totalWorking: sum.totalWorkingHours,
+          absentPeriods,
+          odPeriods,
+        });
+      } else if (sum.presentHours > 0 || sum.odHours > 0) {
         fullPresentees.push(student);
       }
     });
@@ -115,10 +168,11 @@ export const AttendanceSummaryShareModal: React.FC<AttendanceSummaryShareModalPr
     return {
       fullAbsentees,
       partialAbsentees,
+      odStudents,
       fullPresentees,
       overview: dailyOverview,
     };
-  }, [todaySummaries, activeStudents, dailyOverview]);
+  }, [todaySummaries, activeStudents, dailyOverview, studentPeriodMarks, dayOrderNumber, classId]);
 
   // ── Generate Formatted Text ──
   const generatedText = useMemo(() => {
@@ -137,16 +191,6 @@ export const AttendanceSummaryShareModal: React.FC<AttendanceSummaryShareModalPr
         txt += `Date: ${formattedDate} ${dayLabel ? `| ${dayLabel}` : ''}\n`;
         txt += `Period: ${periodLabel} ${subject ? `(${subject})` : ''}\n\n`;
 
-        txt += `*Presentees (${presentCount}/${total}):*\n`;
-        if (presentList.length === 0) {
-          txt += `- None\n`;
-        } else {
-          presentList.forEach((s, idx) => {
-            txt += `${idx + 1}. ${s.name} (${s.student_id})\n`;
-          });
-        }
-        txt += `\n`;
-
         txt += `*Absentees (${absentCount}):*\n`;
         if (absentList.length === 0) {
           txt += `Nil (All students present)\n`;
@@ -164,6 +208,16 @@ export const AttendanceSummaryShareModal: React.FC<AttendanceSummaryShareModalPr
           });
           txt += `\n`;
         }
+
+        txt += `*Presentees (${presentCount}/${total}):*\n`;
+        if (presentList.length === 0) {
+          txt += `- None\n`;
+        } else {
+          presentList.forEach((s, idx) => {
+            txt += `${idx + 1}. ${s.name} (${s.student_id})\n`;
+          });
+        }
+        txt += `\n`;
 
         txt += `*Summary:* Total Present: *${presentCount}/${total}* | Total Absent: *${absentCount}* | Attendance: *${percentage}%*`;
         return txt;
@@ -240,35 +294,46 @@ export const AttendanceSummaryShareModal: React.FC<AttendanceSummaryShareModalPr
     // ── Full Day Report ──
     const fullAbs = fullDayStats?.fullAbsentees || [];
     const partAbs = fullDayStats?.partialAbsentees || [];
+    const odSts = fullDayStats?.odStudents || [];
     const ov = dailyOverview;
 
-    let txt = `*SPIHER Full Day Attendance Report*\n`;
-    txt += `Class: ${classId} (${classNameTitle})\n`;
-    txt += `Date: ${formattedDate} ${dayLabel ? `| ${dayLabel}` : ''}\n`;
-    txt += `Periods Completed: ${ov ? `${ov.periodsCompleted} / ${ov.totalPeriods}` : '7'}\n\n`;
+    let txt = `*🎓 SPIHER Full Day Attendance Report*\n`;
+    txt += `*Class:* ${classId} (${classNameTitle})\n`;
+    txt += `*Date:* ${formattedDate} ${dayLabel ? `| ${dayLabel}` : ''}\n`;
+    txt += `*Periods Completed:* ${ov ? `${ov.periodsCompleted} / ${ov.totalPeriods}` : '7'}\n\n`;
+
+    txt += `*🔴 Absentees Breakdown (${fullAbs.length + partAbs.length} Students):*\n`;
 
     if (fullAbs.length > 0) {
-      txt += `*Full-Day Absentees (${fullAbs.length}):*\n`;
+      txt += `\n*• Full-Day Absentees (${fullAbs.length}):*\n`;
       fullAbs.forEach(({ student }, idx) => {
-        txt += `${idx + 1}. ${student.name} (${student.student_id})\n`;
+        txt += `  ${idx + 1}. ${student.name} (${student.student_id})\n`;
       });
-      txt += `\n`;
     }
 
     if (partAbs.length > 0) {
-      txt += `*Partial Period Absentees (${partAbs.length}):*\n`;
-      partAbs.forEach(({ student, absentHours, presentHours }, idx) => {
-        txt += `${idx + 1}. ${student.name} (${student.student_id}) — Absent ${absentHours} hrs, Attended ${presentHours} hrs\n`;
+      txt += `\n*• Period-Wise Absentees (${partAbs.length}):*\n`;
+      partAbs.forEach(({ student, absentPeriods, presentHours, totalWorking }, idx) => {
+        const pText = absentPeriods.length > 0
+          ? absentPeriods.map((ap) => `P${ap.period} (${ap.subject})`).join(', ')
+          : 'Specific periods';
+        txt += `  ${idx + 1}. ${student.name} (${student.student_id})\n     ↳ Absent in: *${pText}* (${presentHours}/${totalWorking} hrs attended)\n`;
       });
-      txt += `\n`;
     }
 
     if (fullAbs.length === 0 && partAbs.length === 0) {
-      txt += `*100% Attendance for All Periods Today*\n\n`;
+      txt += `*✓ 100% Attendance for All Periods Today*\n`;
+    }
+
+    if (odSts.length > 0) {
+      txt += `\n*🟡 On Duty (OD) (${odSts.length}):*\n`;
+      odSts.forEach(({ student, odPeriods }, idx) => {
+        txt += `  ${idx + 1}. ${student.name} (${student.student_id}) — ${odPeriods.map((o) => `P${o.period} (${o.subject})`).join(', ')}\n`;
+      });
     }
 
     if (ov) {
-      txt += `*Day Stats Summary:*\n`;
+      txt += `\n*Day Summary Stats:*\n`;
       txt += `• Total Enrolled: *${activeStudents.length}*\n`;
       txt += `• Present Hours: *${ov.presentCount} hrs*\n`;
       txt += `• Absent Hours: *${ov.absentCount} hrs*\n`;
@@ -395,57 +460,55 @@ export const AttendanceSummaryShareModal: React.FC<AttendanceSummaryShareModalPr
               </div>
             </div>
 
-            {/* Format Style Selector (for Period mode) */}
-            {scope === 'period' && (
-              <div>
-                <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
-                  Format Style:
-                </label>
-                <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-2xl text-[11px] font-bold">
-                  <button
-                    type="button"
-                    onClick={() => setFormat('standard')}
-                    className={cn(
-                      'py-1.5 px-2 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer',
-                      format === 'standard'
-                        ? 'bg-white text-blue-700 shadow-xs font-black'
-                        : 'text-slate-600 hover:text-slate-900'
-                    )}
-                  >
-                    <MessageCircle className="w-3 h-3 text-emerald-600" />
-                    <span>WhatsApp</span>
-                  </button>
+            {/* Format Style Selector */}
+            <div>
+              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
+                Format Style:
+              </label>
+              <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-2xl text-[11px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setFormat('standard')}
+                  className={cn(
+                    'py-1.5 px-2 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer',
+                    format === 'standard'
+                      ? 'bg-white text-blue-700 shadow-xs font-black'
+                      : 'text-slate-600 hover:text-slate-900'
+                  )}
+                >
+                  <MessageCircle className="w-3 h-3 text-emerald-600" />
+                  <span>WhatsApp</span>
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setFormat('compact')}
-                    className={cn(
-                      'py-1.5 px-2 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer',
-                      format === 'compact'
-                        ? 'bg-white text-blue-700 shadow-xs font-black'
-                        : 'text-slate-600 hover:text-slate-900'
-                    )}
-                  >
-                    <XCircle className="w-3 h-3 text-rose-600" />
-                    <span>Absentees Only</span>
-                  </button>
+                <button
+                  type="button"
+                  onClick={() => setFormat('compact')}
+                  className={cn(
+                    'py-1.5 px-2 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer',
+                    format === 'compact'
+                      ? 'bg-white text-blue-700 shadow-xs font-black'
+                      : 'text-slate-600 hover:text-slate-900'
+                  )}
+                >
+                  <XCircle className="w-3 h-3 text-rose-600" />
+                  <span>Absentees Only</span>
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setFormat('complete')}
-                    className={cn(
-                      'py-1.5 px-2 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer',
-                      format === 'complete'
-                        ? 'bg-white text-blue-700 shadow-xs font-black'
-                        : 'text-slate-600 hover:text-slate-900'
-                    )}
-                  >
-                    <FileText className="w-3 h-3 text-slate-700" />
-                    <span>Detailed Doc</span>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setFormat('complete')}
+                  className={cn(
+                    'py-1.5 px-2 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer',
+                    format === 'complete'
+                      ? 'bg-white text-blue-700 shadow-xs font-black'
+                      : 'text-slate-600 hover:text-slate-900'
+                  )}
+                >
+                  <FileText className="w-3 h-3 text-slate-700" />
+                  <span>Detailed Doc</span>
+                </button>
               </div>
-            )}
+            </div>
           </div>
 
           {/* Live Text Preview Box */}
@@ -468,26 +531,6 @@ export const AttendanceSummaryShareModal: React.FC<AttendanceSummaryShareModalPr
                 rows={10}
                 className="w-full p-3.5 bg-slate-900 text-emerald-400 font-mono text-xs rounded-2xl border border-slate-800 focus:outline-none select-all resize-none shadow-inner leading-relaxed"
               />
-            </div>
-          </div>
-
-          {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-4 gap-2 text-center p-2.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs">
-            <div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Total</span>
-              <p className="font-black text-slate-800 text-sm">{periodStats.total}</p>
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-emerald-600 uppercase">Present</span>
-              <p className="font-black text-emerald-700 text-sm">{periodStats.presentCount}</p>
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-rose-600 uppercase">Absent</span>
-              <p className="font-black text-rose-700 text-sm">{periodStats.absentCount}</p>
-            </div>
-            <div>
-              <span className="text-[10px] font-bold text-blue-600 uppercase">Percent</span>
-              <p className="font-black text-blue-700 text-sm">{periodStats.percentage}%</p>
             </div>
           </div>
         </div>

@@ -10,6 +10,7 @@ import { getSubjectForSlot, PERIOD_TIMINGS } from '../data/timetable';
 import { getAllDayCycleLogs, DayCycleEntry } from './dayCycleService';
 import { fetchStudents, Student } from './studentService';
 import { AttendanceItem } from './attendanceService';
+import { getMonthDateRange } from './monthlyAttendanceService';
 
 export interface FullReportRecord {
   attendance_id: string;
@@ -87,9 +88,10 @@ export async function generateFullAttendanceReport(
         .in('student_id', studentIds);
 
       if (filters.month && filters.month !== 'all') {
+        const { startDate, endDate } = getMonthDateRange(filters.month);
         query = query
-          .gte('date', `${filters.month}-01`)
-          .lte('date', `${filters.month}-31`);
+          .gte('date', startDate)
+          .lte('date', endDate);
       }
       if (filters.startDate) {
         query = query.gte('date', filters.startDate);
@@ -119,7 +121,17 @@ export async function generateFullAttendanceReport(
       if (raw) {
         const parsed = JSON.parse(raw) as AttendanceItem[];
         const idSet = new Set(studentIds);
-        rawAttendance = parsed.filter((r) => idSet.has(r.student_id));
+        rawAttendance = parsed.filter((r) => {
+          if (!idSet.has(r.student_id)) return false;
+          if (filters.month && filters.month !== 'all') {
+            const { startDate, endDate } = getMonthDateRange(filters.month);
+            if (r.date < startDate || r.date > endDate) return false;
+          }
+          if (filters.startDate && r.date < filters.startDate) return false;
+          if (filters.endDate && r.date > filters.endDate) return false;
+          if (filters.status && filters.status !== 'all' && r.status !== filters.status) return false;
+          return true;
+        });
       }
     } catch {
       // ignore

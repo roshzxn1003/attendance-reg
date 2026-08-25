@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { NavLink } from 'react-router-dom';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Card, CardContent } from '../components/common/Card';
 import { useApp } from '../context/AppContext';
@@ -9,27 +10,30 @@ import {
   Calendar,
   Clock,
   Palmtree,
-  Info,
   Coffee,
   Utensils,
   BarChart3,
   CheckSquare,
   Layers,
   Check,
+  MessageCircle,
+  Zap,
 } from 'lucide-react';
 import { Badge } from '../components/common/Badge';
+import { Button } from '../components/common/Button';
 import { DayCycleSetupCard } from '../components/daycycle/DayCycleSetupCard';
 import { AttendanceMarkingGrid } from '../components/attendance/AttendanceMarkingGrid';
 import { DailyAttendanceOverviewCard } from '../components/attendance/DailyAttendanceOverviewCard';
 import { StudentAttendanceSummaryTable } from '../components/attendance/StudentAttendanceSummaryTable';
 import { AttendanceSummaryShareModal } from '../components/attendance/AttendanceSummaryShareModal';
+import { DailyAttendanceReportTab } from '../components/attendance/DailyAttendanceReportTab';
 import { useDayCycle } from '../hooks/useDayCycle';
 import { useTimetable } from '../hooks/useTimetable';
 import { useStudents } from '../hooks/useStudents';
 import { useAttendanceDashboard } from '../hooks/useAttendanceDashboard';
 import { cn } from '../lib/utils';
 
-type ActiveViewMode = 'marking' | 'summary';
+type ActiveViewMode = 'marking' | 'report' | 'summary';
 
 export const AttendancePage: React.FC = () => {
   const { selectedClass } = useApp();
@@ -54,10 +58,11 @@ export const AttendancePage: React.FC = () => {
 
   // Students Hook for active class (strictly filter to active students)
   const { students } = useStudents(selectedClass.id);
-  const activeStudents = useMemo(() => students.filter((s) => s.active), [students]);
+  const activeStudents = useMemo(() => students.filter((s) => s.active !== false), [students]);
 
-  // Step 7 Attendance Dashboard & Calculations Hook
+  // Attendance Dashboard & Calculations Hook
   const {
+    dateRecords,
     dailyOverview,
     todaySummaries,
     cumulativeSummaries,
@@ -121,35 +126,69 @@ export const AttendancePage: React.FC = () => {
     : `${selectedSlots[0]?.timing.split(' – ')[0] || ''} – ${selectedSlots[selectedSlots.length - 1]?.timing.split(' – ')[1] || ''}`;
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-5 pb-12">
       <PageHeader
-        title="Attendance Marking & Dashboard"
-        subtitle="Fast, CR-optimized period attendance marking with multi-period selection support for combined lab sessions."
+        title="Attendance Marking & Daily Reports"
+        subtitle="Fast, CR-optimized period attendance marking, WhatsApp reports, and period registers for Room 245."
         badge="Daily Flow"
       />
 
-      {/* Date Picker Bar */}
-      <Card className="bg-white border-slate-200">
-        <CardContent className="p-4 sm:p-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-300 shadow-2xs">
+      {/* ── Top Bar: Date Picker & Quick Actions ── */}
+      <Card className="bg-white border-slate-200 shadow-xs">
+        <CardContent className="p-3.5 sm:p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-300 shadow-2xs">
                 <Calendar className="w-4 h-4 text-blue-600" />
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="text-sm font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer font-mono"
+                  className="text-xs sm:text-sm font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer font-mono"
                 />
               </div>
 
               <div className="text-xs text-slate-600 font-semibold">
                 {formatDate(selectedDate)}
               </div>
+
+              {activeDayOrderLabel && !isHoliday && (
+                <Badge variant="info" size="sm">
+                  {activeDayOrderLabel}
+                </Badge>
+              )}
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 font-medium">Active Roster:</span>
+            <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+              {/* WhatsApp Quick Switch Button */}
+              {isAssigned && !isHoliday && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setActiveView('report')}
+                  className={cn(
+                    'gap-1.5 font-bold text-xs py-1.5 px-3 rounded-xl transition-all cursor-pointer',
+                    activeView === 'report'
+                      ? 'bg-emerald-700 text-white shadow-xs'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                  )}
+                  title="Open WhatsApp report & daily absentees summary"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 fill-current" />
+                  <span>WhatsApp Report</span>
+                </Button>
+              )}
+
+              {/* Backlog Wizard Button */}
+              <NavLink
+                to="/backlog-entry"
+                className="gap-1.5 font-bold text-xs py-1.5 px-3 rounded-xl transition-all bg-amber-500 hover:bg-amber-600 text-white shadow-xs flex items-center cursor-pointer"
+                title="Rapidly enter 2 months of handwritten registers with the Backlog Wizard"
+              >
+                <Zap className="w-3.5 h-3.5 fill-current" />
+                <span>Backlog Wizard</span>
+              </NavLink>
+
               <Badge variant="purple" size="md">
                 {selectedClass.id} ({selectedClass.name})
               </Badge>
@@ -158,75 +197,116 @@ export const AttendancePage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* ── STEP 5: Day 1–Day 6 Calendar Cycle Setup Card ── */}
-      <DayCycleSetupCard
-        date={selectedDate}
-        classId={selectedClass.id}
-        classNameTitle={selectedClass.name}
-        entry={currentEntry}
-        suggestedDay={suggestedDay}
-        prevWorkingDate={prevWorkingDate}
-        prevWorkingDay={prevWorkingDay}
-        onAssignDay={(day, notes) => assignDay(day, notes)}
-        onMarkHoliday={(reason, notes) => markHoliday(reason, notes)}
-        loading={cycleLoading}
-      />
+      {/* ── Top Level View Switcher Tabs (Placed prominently at the top!) ── */}
+      <div className="bg-white p-1.5 rounded-2xl border border-slate-200 shadow-2xs flex items-center justify-between gap-2 overflow-x-auto">
+        <div className="flex items-center gap-1 sm:gap-1.5 flex-nowrap">
+          {/* Tab 1: Period Marking */}
+          <button
+            type="button"
+            onClick={() => setActiveView('marking')}
+            className={cn(
+              'flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer',
+              activeView === 'marking'
+                ? 'bg-blue-600 text-white shadow-xs font-black'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            )}
+          >
+            <CheckSquare className="w-3.5 h-3.5" />
+            <span>Period Marking</span>
+          </button>
 
-      {/* ── Working Day Content ── */}
+          {/* Tab 2: WhatsApp & Day Report (Dedicated Tab!) */}
+          <button
+            type="button"
+            onClick={() => setActiveView('report')}
+            className={cn(
+              'flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer',
+              activeView === 'report'
+                ? 'bg-emerald-600 text-white shadow-xs font-black'
+                : 'text-emerald-800 bg-emerald-50/70 border border-emerald-300 hover:bg-emerald-100'
+            )}
+          >
+            <MessageCircle className="w-3.5 h-3.5 fill-current" />
+            <span>WhatsApp & Day Report</span>
+          </button>
+
+          {/* Tab 3: Student Summary Table */}
+          <button
+            type="button"
+            onClick={() => setActiveView('summary')}
+            className={cn(
+              'flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer',
+              activeView === 'summary'
+                ? 'bg-blue-600 text-white shadow-xs font-black'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            )}
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>Student Summary Table</span>
+          </button>
+        </div>
+
+        <span className="text-[11px] text-slate-400 font-mono hidden md:inline px-2">
+          {activeStudents.length} Active Students
+        </span>
+      </div>
+
+      {/* ── CASE 1: Holiday Banner ── */}
+      {isAssigned && isHoliday && (
+        <Card className="border-rose-200 bg-rose-50/60">
+          <CardContent className="p-8 text-center max-w-md mx-auto space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center mx-auto shadow-inner">
+              <Palmtree className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-rose-950">
+              Holiday — Attendance cannot be marked.
+            </h3>
+            <p className="text-xs text-rose-800 leading-relaxed">
+              Reason: <strong>{currentEntry.holiday_reason || 'Holiday'}</strong> on {formatDate(selectedDate)}.
+              Attendance periods are not scheduled on holidays.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── CASE 2: Unassigned Notice (if Day Order not set yet) ── */}
+      {!isAssigned && (
+        <DayCycleSetupCard
+          date={selectedDate}
+          classId={selectedClass.id}
+          classNameTitle={selectedClass.name}
+          entry={currentEntry}
+          suggestedDay={suggestedDay}
+          prevWorkingDate={prevWorkingDate}
+          prevWorkingDay={prevWorkingDay}
+          onAssignDay={(day, notes) => assignDay(day, notes)}
+          onMarkHoliday={(reason, notes) => markHoliday(reason, notes)}
+          loading={cycleLoading}
+        />
+      )}
+
+      {/* ── CASE 3: Assigned Working Day Content ── */}
       {isAssigned && !isHoliday && activeDayNumber && (
         <div className="space-y-6">
-          {/* ── STEP 7: Daily Attendance Overview Dashboard Card ── */}
-          <DailyAttendanceOverviewCard
-            classId={selectedClass.id}
-            classNameTitle={selectedClass.name}
-            date={selectedDate}
-            dayOrderNumber={activeDayNumber}
-            overview={dailyOverview}
-            isHoliday={isHoliday}
-            holidayReason={currentEntry?.holiday_reason}
-            onSelectPeriod={(p) => togglePeriod(p)}
-            selectedPeriods={selectedPeriods}
-            onShareClick={() => setIsDailyShareModalOpen(true)}
-          />
-
-          {/* Navigation View Switcher (Marking vs Summary Table) */}
-          <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-1">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setActiveView('marking')}
-                className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
-                  activeView === 'marking'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <CheckSquare className="w-3.5 h-3.5" />
-                <span>Period Marking</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveView('summary')}
-                className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-colors ${
-                  activeView === 'summary'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                <BarChart3 className="w-3.5 h-3.5" />
-                <span>Student Summary Table</span>
-              </button>
-            </div>
-
-            <span className="text-xs text-slate-400 hidden sm:inline font-mono">
-              {students.filter((s) => s.active).length} Active Students
-            </span>
-          </div>
-
-          {/* ── View 1: Period Marking Flow ── */}
+          {/* ════════════════════════════════════════════════════════════════════
+              TAB 1: PERIOD MARKING VIEW
+             ════════════════════════════════════════════════════════════════════ */}
           {activeView === 'marking' && (
-            <div className="space-y-6">
+            <div className="space-y-5">
+              {/* Day Cycle Setup Card (Collapsible or configurable) */}
+              <DayCycleSetupCard
+                date={selectedDate}
+                classId={selectedClass.id}
+                classNameTitle={selectedClass.name}
+                entry={currentEntry}
+                suggestedDay={suggestedDay}
+                prevWorkingDate={prevWorkingDate}
+                prevWorkingDay={prevWorkingDay}
+                onAssignDay={(day, notes) => assignDay(day, notes)}
+                onMarkHoliday={(reason, notes) => markHoliday(reason, notes)}
+                loading={cycleLoading}
+              />
+
               {/* Multi-Period Selector Toolbar */}
               <div>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
@@ -251,7 +331,7 @@ export const AttendancePage: React.FC = () => {
                       type="button"
                       onClick={selectAllPeriods}
                       className={cn(
-                        'px-2.5 py-1 rounded-lg text-xs font-bold transition-all border',
+                        'px-2.5 py-1 rounded-lg text-xs font-bold transition-all border cursor-pointer',
                         selectedPeriods.length === 7
                           ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
                           : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
@@ -262,14 +342,14 @@ export const AttendancePage: React.FC = () => {
                     <button
                       type="button"
                       onClick={selectMorningPeriods}
-                      className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-white text-slate-600 border border-slate-300 hover:bg-slate-50"
+                      className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-white text-slate-600 border border-slate-300 hover:bg-slate-50 cursor-pointer"
                     >
                       P1–P4
                     </button>
                     <button
                       type="button"
                       onClick={selectAfternoonPeriods}
-                      className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-white text-slate-600 border border-slate-300 hover:bg-slate-50"
+                      className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-white text-slate-600 border border-slate-300 hover:bg-slate-50 cursor-pointer"
                     >
                       P5–P7
                     </button>
@@ -277,7 +357,7 @@ export const AttendancePage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => selectSinglePeriod(selectedPeriods[0])}
-                        className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer"
                       >
                         Single (P{selectedPeriods[0]})
                       </button>
@@ -368,7 +448,7 @@ export const AttendancePage: React.FC = () => {
                 </div>
               </div>
 
-              {/* ── Attendance Marking Grid Component with Multi-Period Support ── */}
+              {/* Attendance Marking Grid Component with Multi-Period Support */}
               <AttendanceMarkingGrid
                 classId={selectedClass.id}
                 classNameTitle={selectedClass.name}
@@ -383,55 +463,54 @@ export const AttendancePage: React.FC = () => {
             </div>
           )}
 
-          {/* ── View 2: Student Summary Table ── */}
-          {activeView === 'summary' && (
-            <StudentAttendanceSummaryTable
+          {/* ════════════════════════════════════════════════════════════════════
+              TAB 2: DEDICATED WHATSAPP & DAY SUMMARY REPORT TAB (NO SCROLLING NEEDED!)
+             ════════════════════════════════════════════════════════════════════ */}
+          {activeView === 'report' && (
+            <DailyAttendanceReportTab
               classId={selectedClass.id}
               classNameTitle={selectedClass.name}
               date={selectedDate}
+              dayOrderNumber={activeDayNumber}
+              students={activeStudents}
+              dateRecords={dateRecords}
               todaySummaries={todaySummaries}
-              cumulativeSummaries={cumulativeSummaries}
+              dailyOverview={dailyOverview}
+              selectedPeriod={selectedPeriods[0] || 1}
             />
+          )}
+
+          {/* ════════════════════════════════════════════════════════════════════
+              TAB 3: STUDENT SUMMARY TABLE
+             ════════════════════════════════════════════════════════════════════ */}
+          {activeView === 'summary' && (
+            <div className="space-y-5">
+              <DailyAttendanceOverviewCard
+                classId={selectedClass.id}
+                classNameTitle={selectedClass.name}
+                date={selectedDate}
+                dayOrderNumber={activeDayNumber}
+                overview={dailyOverview}
+                isHoliday={isHoliday}
+                holidayReason={currentEntry?.holiday_reason}
+                onSelectPeriod={(p) => togglePeriod(p)}
+                selectedPeriods={selectedPeriods}
+                onShareClick={() => setActiveView('report')}
+              />
+
+              <StudentAttendanceSummaryTable
+                classId={selectedClass.id}
+                classNameTitle={selectedClass.name}
+                date={selectedDate}
+                todaySummaries={todaySummaries}
+                cumulativeSummaries={cumulativeSummaries}
+              />
+            </div>
           )}
         </div>
       )}
 
-      {/* ── CASE 2: Holiday Banner ── */}
-      {isAssigned && isHoliday && (
-        <Card className="border-rose-200 bg-rose-50/60">
-          <CardContent className="p-8 text-center max-w-md mx-auto space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center mx-auto shadow-inner">
-              <Palmtree className="w-6 h-6" />
-            </div>
-            <h3 className="text-base font-bold text-rose-950">
-              Holiday — Attendance cannot be marked.
-            </h3>
-            <p className="text-xs text-rose-800 leading-relaxed">
-              Reason: <strong>{currentEntry.holiday_reason || 'Holiday'}</strong> on {formatDate(selectedDate)}.
-              Attendance periods are not scheduled on holidays.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── CASE 3: Unassigned Notice ── */}
-      {!isAssigned && (
-        <Card className="border-dashed border-2 border-slate-300 bg-slate-50/50">
-          <CardContent className="p-8 text-center max-w-md mx-auto space-y-2">
-            <div className="w-10 h-10 rounded-xl bg-slate-200 text-slate-600 flex items-center justify-center mx-auto">
-              <Info className="w-5 h-5" />
-            </div>
-            <h3 className="text-sm font-bold text-slate-800">
-              Please assign a Day Order to mark attendance
-            </h3>
-            <p className="text-xs text-slate-500">
-              Use the card above to accept the suggested Day Order or choose a day number (1–6) for {formatDate(selectedDate)}.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── Daily Summary Share Modal ── */}
+      {/* ── Daily Summary Share Modal (for secondary modal flow) ── */}
       <AttendanceSummaryShareModal
         isOpen={isDailyShareModalOpen}
         onClose={() => setIsDailyShareModalOpen(false)}
@@ -444,7 +523,10 @@ export const AttendancePage: React.FC = () => {
         students={activeStudents}
         todaySummaries={todaySummaries}
         dailyOverview={dailyOverview}
+        dateRecords={dateRecords}
       />
     </div>
   );
 };
+
+export default AttendancePage;

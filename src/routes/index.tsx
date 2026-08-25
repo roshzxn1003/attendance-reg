@@ -2,6 +2,8 @@ import { createBrowserRouter } from 'react-router-dom';
 import { AppLayout } from '../components/layout/AppLayout';
 import { AttendancePage } from '../pages/AttendancePage';
 import { StudentsPage } from '../pages/StudentsPage';
+import { FacultySubjectReportPage } from '../pages/FacultySubjectReportPage';
+import { BacklogEntryPage } from '../pages/BacklogEntryPage';
 import { AdminPage } from '../pages/AdminPage';
 import { LoginPage } from '../pages/LoginPage';
 import { StudentPortalPage } from '../pages/StudentPortalPage';
@@ -38,11 +40,51 @@ export const router = createBrowserRouter([
     ),
   },
   {
+    path: '/backlog-entry',
+    element: (
+      <ProtectedRoute allowedRoles={['cr', 'admin']}>
+        <AppLayout>
+          <BacklogEntryPage />
+        </AppLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/rapid-entry',
+    element: (
+      <ProtectedRoute allowedRoles={['cr', 'admin']}>
+        <AppLayout>
+          <BacklogEntryPage />
+        </AppLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: '/students',
     element: (
       <ProtectedRoute allowedRoles={['cr', 'admin']}>
         <AppLayout>
           <StudentsPage />
+        </AppLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/faculty-report',
+    element: (
+      <ProtectedRoute allowedRoles={['cr', 'admin']}>
+        <AppLayout>
+          <FacultySubjectReportPage />
+        </AppLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/subject-report',
+    element: (
+      <ProtectedRoute allowedRoles={['cr', 'admin']}>
+        <AppLayout>
+          <FacultySubjectReportPage />
         </AppLayout>
       </ProtectedRoute>
     ),

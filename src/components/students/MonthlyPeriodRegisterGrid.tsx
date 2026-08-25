@@ -20,7 +20,7 @@ import {
   generateDateRangeMatrix,
   exportMonthlyMatrixExcel,
 } from '../../services/monthlyMatrixService';
-import { ACADEMIC_MONTHS, MULTI_MONTH_PRESETS } from '../../services/monthlyAttendanceService';
+import { ACADEMIC_MONTHS, MULTI_MONTH_PRESETS, getMonthDateRange } from '../../services/monthlyAttendanceService';
 import { Card, CardContent } from '../common/Card';
 import { Badge } from '../common/Badge';
 import { Button } from '../common/Button';
@@ -77,12 +77,11 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
   // Compute active start & end dates
   const activeDateRange = useMemo(() => {
     if (rangeMode === 'single_month') {
-      const [y, m] = selectedMonth.split('-');
-      const days = new Date(parseInt(y, 10), parseInt(m, 10), 0).getDate();
+      const { startDate, endDate } = getMonthDateRange(selectedMonth);
       const monthObj = ACADEMIC_MONTHS.find((item) => item.value === selectedMonth);
       return {
-        startDate: `${selectedMonth}-01`,
-        endDate: `${selectedMonth}-${String(days).padStart(2, '0')}`,
+        startDate,
+        endDate,
         label: monthObj ? monthObj.label.toUpperCase() : selectedMonth,
       };
     }
@@ -98,7 +97,7 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
 
     // Custom range
     return {
-      startDate: customStartDate || '2026-08-01',
+      startDate: customStartDate || '2026-07-01',
       endDate: customEndDate || '2026-12-31',
       label: `CUSTOM: ${customStartDate} TO ${customEndDate}`,
     };

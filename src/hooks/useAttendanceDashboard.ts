@@ -62,6 +62,7 @@ export function useAttendanceDashboard(
   }, [activeStudents, allClassRecords]);
 
   return {
+    dateRecords,
     dailyOverview,
     todaySummaries,
     cumulativeSummaries,

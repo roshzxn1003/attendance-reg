@@ -31,10 +31,12 @@ export const ACADEMIC_MONTHS = [
 ];
 
 export const MULTI_MONTH_PRESETS = [
+  { id: '2m-jul-aug', label: '2 Months (Jul – Aug 2026)', start: '2026-07-01', end: '2026-08-31' },
   { id: '2m-aug-sep', label: '2 Months (Aug – Sep 2026)', start: '2026-08-01', end: '2026-09-30' },
+  { id: '3m-jul-sep', label: '3 Months (Jul – Sep 2026)', start: '2026-07-01', end: '2026-09-30' },
   { id: '3m-aug-oct', label: '3 Months (Aug – Oct 2026)', start: '2026-08-01', end: '2026-10-31' },
-  { id: '5m-semester', label: '5 Months / Full Semester (Aug – Dec 2026)', start: '2026-08-01', end: '2026-12-31' },
-  { id: '2m-oct-nov', label: '2 Months (Oct – Nov 2026)', start: '2026-10-01', end: '2026-11-30' },
+  { id: '6m-semester', label: 'Full Semester (Jul – Dec 2026)', start: '2026-07-01', end: '2026-12-31' },
+  { id: '5m-semester', label: '5 Months (Aug – Dec 2026)', start: '2026-08-01', end: '2026-12-31' },
 ];
 
 const LOCAL_STORAGE_ATTENDANCE_KEY = 'smart_cr_attendance_records';
@@ -88,6 +90,19 @@ export async function fetchDateRangeClassAttendance(
 }
 
 /**
+ * Get exact startDate and endDate for any month (e.g. 2026-09 -> 2026-09-01 to 2026-09-30)
+ */
+export function getMonthDateRange(yearMonth: string): { startDate: string; endDate: string } {
+  const [yearStr, monthStr] = yearMonth.split('-');
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const startDate = `${yearMonth}-01`;
+  const endDate = `${yearMonth}-${String(daysInMonth).padStart(2, '0')}`;
+  return { startDate, endDate };
+}
+
+/**
  * Fetch all attendance records for a specific class within a month (YYYY-MM).
  */
 export async function fetchMonthClassAttendance(
@@ -95,8 +110,7 @@ export async function fetchMonthClassAttendance(
   yearMonth: string,
   studentIds: string[]
 ): Promise<AttendanceItem[]> {
-  const startDate = `${yearMonth}-01`;
-  const endDate = `${yearMonth}-31`;
+  const { startDate, endDate } = getMonthDateRange(yearMonth);
   return fetchDateRangeClassAttendance(classId, startDate, endDate, studentIds);
 }
 
