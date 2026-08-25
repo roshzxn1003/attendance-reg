@@ -8,6 +8,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { AttendanceStatus, ClassId, PeriodNumber, StudentAttendanceSummary } from '../types';
 import { Student } from './studentService';
 import { getDayCycleForDate } from './dayCycleService';
+import { queueForSync } from './offlineSyncService';
 
 export interface AttendanceItem {
   attendance_id?: string;
@@ -295,16 +296,22 @@ export async function saveMultiplePeriodsAttendance(
     }
   }
 
-  if (isSupabaseConfigured()) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = supabase as any;
+  let supabaseSuccess = false;
 
-    const { error } = await sb
-      .from('attendance')
-      .upsert(payload, { onConflict: 'student_id,date,period_number' });
+  if (isSupabaseConfigured() && typeof navigator !== 'undefined' && navigator.onLine) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = supabase as any;
 
-    if (error) {
-      throw new Error(`Failed to save attendance: ${error.message}`);
+      const { error } = await sb
+        .from('attendance')
+        .upsert(payload, { onConflict: 'student_id,date,period_number' });
+
+      if (!error) {
+        supabaseSuccess = true;
+      }
+    } catch {
+      // Network failure -> fallback to local storage and sync queue below
     }
   }
 
@@ -318,6 +325,11 @@ export async function saveMultiplePeriodsAttendance(
   );
 
   saveLocalAttendance([...filtered, ...payload]);
+
+  // If not directly synced to Supabase (e.g. offline), queue for background auto-sync
+  if (!supabaseSuccess) {
+    queueForSync(payload);
+  }
 
   return { savedCount: payload.length, markedAt: now, periodsCount: periodNumbers.length };
 }

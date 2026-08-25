@@ -1,0 +1,58 @@
+{
+  "name": "SPIHER Smart Attendance CR & Faculty Portal",
+  "short_name": "SPIHER Attendance",
+  "description": "Period Attendance Register, Day 1–6 Timetable & Rapid Backlog Management System for SPIHER",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#2563eb",
+  "categories": ["education", "productivity", "utilities"],
+  "lang": "en-US",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Rapid Backlog Wizard",
+      "short_name": "Backlog",
+      "description": "Fast handwritten register day-by-day attendance entry",
+      "url": "/backlog-entry",
+      "icons": [{ "src": "/icons/icon.svg", "sizes": "96x96" }]
+    },
+    {
+      "name": "Today's Attendance",
+      "short_name": "Mark Today",
+      "description": "Period-wise daily attendance marking grid",
+      "url": "/attendance",
+      "icons": [{ "src": "/icons/icon.svg", "sizes": "96x96" }]
+    },
+    {
+      "name": "Monthly Register Grid",
+      "short_name": "Monthly Grid",
+      "description": "Official 7-period monthly attendance register sheet",
+      "url": "/students",
+      "icons": [{ "src": "/icons/icon.svg", "sizes": "96x96" }]
+    },
+    {
+      "name": "Faculty Subject Report",
+      "short_name": "Faculty Report",
+      "description": "Subject-wise attendance breakdown and defaulter lists",
+      "url": "/faculty-report",
+      "icons": [{ "src": "/icons/icon.svg", "sizes": "96x96" }]
+    }
+  ]
+}

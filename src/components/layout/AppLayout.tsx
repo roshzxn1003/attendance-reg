@@ -5,6 +5,9 @@ import { APP_CONFIG } from '../../lib/constants';
 import { ShieldCheck } from 'lucide-react';
 import { PageTransition } from './PageTransition';
 
+import { PWAInstallBanner } from '../common/PWAInstallBanner';
+import { NetworkStatusBar } from '../common/NetworkStatusBar';
+
 interface AppLayoutProps {
   children?: React.ReactNode;
 }
@@ -12,6 +15,7 @@ interface AppLayoutProps {
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 overflow-x-hidden">
+      <PWAInstallBanner />
       <Navbar />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-8 flex flex-col">
@@ -19,6 +23,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           {children || <Outlet />}
         </PageTransition>
       </main>
+
+      <NetworkStatusBar />
 
       <footer className="bg-white border-t border-slate-200 py-6 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
