@@ -174,14 +174,35 @@ export async function fetchAllClassAttendance(
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any;
-      const { data, error } = await sb
-        .from('attendance')
-        .select('*')
-        .in('student_id', studentIds)
-        .order('date', { ascending: false });
+      const CHUNK_SIZE = 1000;
+      let allRecords: AttendanceItem[] = [];
+      let from = 0;
+      let hasMore = true;
 
-      if (!error && data) {
-        return data as AttendanceItem[];
+      while (hasMore) {
+        const to = from + CHUNK_SIZE - 1;
+        const { data, error } = await sb
+          .from('attendance')
+          .select('*')
+          .in('student_id', studentIds)
+          .order('date', { ascending: false })
+          .range(from, to);
+
+        if (error || !data || data.length === 0) {
+          break;
+        }
+
+        allRecords = allRecords.concat(data as AttendanceItem[]);
+
+        if (data.length < CHUNK_SIZE) {
+          hasMore = false;
+        } else {
+          from += CHUNK_SIZE;
+        }
+      }
+
+      if (allRecords.length > 0) {
+        return allRecords;
       }
     } catch {
       // fallback below

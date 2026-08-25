@@ -103,12 +103,28 @@ export async function generateFullAttendanceReport(
         query = query.eq('status', filters.status);
       }
 
-      const { data, error } = await query
-        .order('date', { ascending: false })
-        .order('period_number', { ascending: true });
+      const CHUNK_SIZE = 1000;
+      let from = 0;
+      let hasMore = true;
 
-      if (!error && data) {
-        rawAttendance = data as AttendanceItem[];
+      while (hasMore) {
+        const to = from + CHUNK_SIZE - 1;
+        const { data, error } = await query
+          .order('date', { ascending: false })
+          .order('period_number', { ascending: true })
+          .range(from, to);
+
+        if (error || !data || data.length === 0) {
+          break;
+        }
+
+        rawAttendance = rawAttendance.concat(data as AttendanceItem[]);
+
+        if (data.length < CHUNK_SIZE) {
+          hasMore = false;
+        } else {
+          from += CHUNK_SIZE;
+        }
       }
     } catch {
       // fallback below
