@@ -13,6 +13,8 @@ import {
   ShieldCheck,
   Layers,
   MessageCircle,
+  LayoutGrid,
+  Smartphone,
 } from 'lucide-react';
 import { ClassId, PeriodNumber } from '../../types';
 import { Student } from '../../services/studentService';
@@ -23,6 +25,7 @@ import { Badge } from '../common/Badge';
 import { Card, CardContent } from '../common/Card';
 import { cn, formatDate } from '../../lib/utils';
 import { AttendanceSummaryShareModal } from './AttendanceSummaryShareModal';
+import { OneByOneAttendanceCard } from './OneByOneAttendanceCard';
 
 interface AttendanceMarkingGridProps {
   classId: ClassId;
@@ -49,6 +52,7 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
 }) => {
   const [search, setSearch] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'unmarked' | 'absent' | 'od'>('all');
+  const [viewMode, setViewMode] = useState<'list' | 'one-by-one'>('list');
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const toast = useToast();
 
@@ -221,80 +225,6 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
         </div>
       </div>
 
-      {/* ── Fast Marking Toolbar ── */}
-      <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center justify-between bg-white p-2.5 sm:p-3 rounded-2xl border border-slate-200 shadow-2xs">
-        <div className="flex items-center gap-1.5 w-full sm:w-auto flex-wrap">
-          {/* Mark All Present */}
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => {
-              markAllPresent();
-              toast.info(`Marked all active students Present for ${periodLabel}`, 'Quick Action');
-            }}
-            className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs flex-1 sm:flex-none py-2 text-xs rounded-xl"
-          >
-            <Check className="w-3.5 h-3.5" />
-            <span>Mark All Present</span>
-          </Button>
-
-          {/* Clear All */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={clearAll}
-            className="gap-1 text-slate-600 hover:text-slate-900 border-slate-300 flex-1 sm:flex-none py-2 text-xs rounded-xl"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
-            <span>Clear</span>
-          </Button>
-
-          {/* WhatsApp Report / Quick Share */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsShareModalOpen(true)}
-            className="gap-1.5 text-emerald-800 bg-emerald-50/70 hover:bg-emerald-100 border-emerald-300 flex-1 sm:flex-none py-2 text-xs rounded-xl font-bold transition-colors cursor-pointer"
-            title="Generate and copy or share formatted attendance report"
-          >
-            <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-            <span>WhatsApp Report</span>
-          </Button>
-        </div>
-
-        {/* Search & Filter */}
-        <div className="flex items-center gap-1.5 w-full sm:w-auto flex-wrap">
-          <div className="relative flex-1 sm:w-48">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search student…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            />
-          </div>
-
-          <div className="flex items-center gap-1 text-xs">
-            {(['all', 'unmarked', 'absent', 'od'] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setFilterMode(mode)}
-                className={cn(
-                  'px-2 py-1 rounded-lg capitalize font-bold transition-colors text-[10px] sm:text-[11px]',
-                  filterMode === mode
-                    ? 'bg-slate-800 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                )}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
       {/* ── Success Toast Banner ── */}
       {saveSuccess && (
         <div className="p-3 bg-emerald-50 border-2 border-emerald-300 rounded-2xl flex items-center justify-between flex-wrap gap-2 text-xs text-emerald-950 shadow-2xs">
@@ -338,145 +268,278 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
         </div>
       )}
 
-      {/* ── Student List (Mobile-Optimized Touch Rows) ── */}
-      <Card className="border-slate-200 bg-white rounded-2xl overflow-hidden">
-        <CardContent className="p-0">
-          {filteredStudents.length === 0 ? (
-            <div className="text-center py-10 text-slate-500 text-xs">
-              <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-              <p className="font-semibold text-slate-700">No students match filter</p>
-              <p className="mt-0.5">Try clearing your search or filter.</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {filteredStudents.map((student, idx) => {
-                const currentStatus = marks[student.student_id];
-
-                return (
-                  <div
-                    key={student.student_id}
-                    className={cn(
-                      'p-2.5 sm:p-3 sm:px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-colors',
-                      currentStatus === 'P' && 'bg-emerald-50/20',
-                      currentStatus === 'A' && 'bg-rose-50/20',
-                      currentStatus === 'OD' && 'bg-amber-50/20',
-                      !currentStatus && 'hover:bg-slate-50/50'
-                    )}
-                  >
-                    {/* Student Info */}
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-4 text-[10px] text-slate-400 font-mono text-center shrink-0">
-                        {idx + 1}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-mono text-[11px] font-bold text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
-                            {student.student_id}
-                          </span>
-                          <span className="font-bold text-xs sm:text-sm text-slate-900 truncate">
-                            {student.name}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Touch-Friendly P / A / OD Button Group */}
-                    <div className="flex items-center gap-1.5 self-stretch sm:self-auto shrink-0 mt-1 sm:mt-0">
-                      {/* P - Present */}
-                      <button
-                        type="button"
-                        onClick={() => markStudent(student.student_id, 'P')}
-                        className={cn(
-                          'flex-1 sm:flex-none h-11 min-w-[50px] sm:min-w-[62px] px-3 rounded-xl font-black text-xs sm:text-sm transition-all duration-100 flex items-center justify-center gap-1 select-none active:scale-95 cursor-pointer',
-                          currentStatus === 'P'
-                            ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-500'
-                            : 'bg-white text-slate-600 border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50 hover:text-emerald-700'
-                        )}
-                      >
-                        <Check className={cn('w-3.5 h-3.5', currentStatus === 'P' ? 'stroke-[3]' : '')} />
-                        <span>P</span>
-                      </button>
-
-                      {/* A - Absent */}
-                      <button
-                        type="button"
-                        onClick={() => markStudent(student.student_id, 'A')}
-                        className={cn(
-                          'flex-1 sm:flex-none h-11 min-w-[50px] sm:min-w-[62px] px-3 rounded-xl font-black text-xs sm:text-sm transition-all duration-100 flex items-center justify-center gap-1 select-none active:scale-95 cursor-pointer',
-                          currentStatus === 'A'
-                            ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30 ring-2 ring-rose-500'
-                            : 'bg-white text-slate-600 border border-slate-200 hover:border-rose-300 hover:bg-rose-50/50 hover:text-rose-700'
-                        )}
-                      >
-                        <X className={cn('w-3.5 h-3.5', currentStatus === 'A' ? 'stroke-[3]' : '')} />
-                        <span>A</span>
-                      </button>
-
-                      {/* OD - On Duty */}
-                      <button
-                        type="button"
-                        onClick={() => markStudent(student.student_id, 'OD')}
-                        className={cn(
-                          'flex-1 sm:flex-none h-11 min-w-[50px] sm:min-w-[62px] px-3 rounded-xl font-black text-xs transition-all duration-100 flex items-center justify-center gap-1 select-none active:scale-95 cursor-pointer',
-                          currentStatus === 'OD'
-                            ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30 ring-2 ring-amber-400'
-                            : 'bg-white text-slate-600 border border-slate-200 hover:border-amber-300 hover:bg-amber-50/50 hover:text-amber-700'
-                        )}
-                      >
-                        <span>OD</span>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Sticky Save Action Bar ── */}
-      <div className="sticky bottom-3 z-20 bg-white/95 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border-2 border-slate-300 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-xs w-full sm:w-auto">
-          {!isAllMarked ? (
-            <div className="flex items-center gap-2 text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 font-bold w-full sm:w-auto text-xs">
-              <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
-              <span>Mark all students ({stats.notMarked} remaining)</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 font-bold text-xs w-full sm:w-auto">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>All {stats.total} marked • Ready to save</span>
-            </div>
-          )}
+      {/* ── View Mode Switcher ── */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-2.5 sm:p-3 rounded-2xl border border-slate-200 shadow-2xs">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-black uppercase tracking-wider text-slate-700">Marking View:</span>
+          <span className="text-xs text-slate-500 font-medium hidden sm:inline">
+            {viewMode === 'one-by-one' ? 'Single Student Focus (Auto-Next)' : 'All Students Grid Sheet'}
+          </span>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Button
-            variant="primary"
-            size="lg"
-            disabled={!isAllMarked || saving}
-            isLoading={saving}
-            onClick={handleSaveClick}
+        <div className="flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs font-bold w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
             className={cn(
-              'gap-2 w-full sm:w-auto font-black px-6 py-2.5 text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer',
-              isMultiPeriod
-                ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20'
-                : isAlreadySaved
-                ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20'
-                : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
+              'flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer',
+              viewMode === 'list'
+                ? 'bg-white text-blue-700 shadow-2xs font-black'
+                : 'text-slate-600 hover:text-slate-900'
             )}
           >
-            <Save className="w-4 h-4" />
-            <span>
-              {isMultiPeriod
-                ? `Save All ${selectedPeriods.length} Periods`
-                : isAlreadySaved
-                ? 'Update Attendance'
-                : 'Save Attendance'}
-            </span>
-          </Button>
+            <LayoutGrid className="w-3.5 h-3.5" />
+            <span>Normal List</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setViewMode('one-by-one')}
+            className={cn(
+              'flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer',
+              viewMode === 'one-by-one'
+                ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                : 'text-slate-600 hover:text-slate-900'
+            )}
+          >
+            <Smartphone className="w-3.5 h-3.5 text-indigo-600" />
+            <span>One-by-One Focus 🎴</span>
+          </button>
         </div>
       </div>
+
+      {/* ── Mode 1: One-by-One Focus Card Mode ── */}
+      {viewMode === 'one-by-one' ? (
+        <OneByOneAttendanceCard
+          students={activeStudents}
+          marks={marks}
+          classId={classId}
+          date={date}
+          selectedPeriods={selectedPeriods}
+          subject={subject}
+          onMarkStudent={markStudent}
+          onSave={handleSaveClick}
+          saving={saving}
+          onSwitchToListView={() => setViewMode('list')}
+        />
+      ) : (
+        /* ── Mode 2: Classic Normal List / Table Mode ── */
+        <>
+          {/* Fast Marking Toolbar */}
+          <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center justify-between bg-white p-2.5 sm:p-3 rounded-2xl border border-slate-200 shadow-2xs">
+            <div className="flex items-center gap-1.5 w-full sm:w-auto flex-wrap">
+              {/* Mark All Present */}
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  markAllPresent();
+                  toast.info(`Marked all active students Present for ${periodLabel}`, 'Quick Action');
+                }}
+                className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs flex-1 sm:flex-none py-2 text-xs rounded-xl"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Mark All Present</span>
+              </Button>
+
+              {/* Clear All */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={clearAll}
+                className="gap-1 text-slate-600 hover:text-slate-900 border-slate-300 flex-1 sm:flex-none py-2 text-xs rounded-xl"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+                <span>Clear</span>
+              </Button>
+
+              {/* WhatsApp Report / Quick Share */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsShareModalOpen(true)}
+                className="gap-1.5 text-emerald-800 bg-emerald-50/70 hover:bg-emerald-100 border-emerald-300 flex-1 sm:flex-none py-2 text-xs rounded-xl font-bold transition-colors cursor-pointer"
+                title="Generate and copy or share formatted attendance report"
+              >
+                <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                <span>WhatsApp Report</span>
+              </Button>
+            </div>
+
+            {/* Search & Filter */}
+            <div className="flex items-center gap-1.5 w-full sm:w-auto flex-wrap">
+              <div className="relative flex-1 sm:w-48">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search student…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+
+              <div className="flex items-center gap-1 text-xs">
+                {(['all', 'unmarked', 'absent', 'od'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setFilterMode(mode)}
+                    className={cn(
+                      'px-2 py-1 rounded-lg capitalize font-bold transition-colors text-[10px] sm:text-[11px]',
+                      filterMode === mode
+                        ? 'bg-slate-800 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    )}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Student List (Mobile-Optimized Touch Rows) */}
+          <Card className="border-slate-200 bg-white rounded-2xl overflow-hidden">
+            <CardContent className="p-0">
+              {filteredStudents.length === 0 ? (
+                <div className="text-center py-10 text-slate-500 text-xs">
+                  <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                  <p className="font-semibold text-slate-700">No students match filter</p>
+                  <p className="mt-0.5">Try clearing your search or filter.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {filteredStudents.map((student, idx) => {
+                    const currentStatus = marks[student.student_id];
+
+                    return (
+                      <div
+                        key={student.student_id}
+                        className={cn(
+                          'p-2.5 sm:p-3 sm:px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-colors',
+                          currentStatus === 'P' && 'bg-emerald-50/20',
+                          currentStatus === 'A' && 'bg-rose-50/20',
+                          currentStatus === 'OD' && 'bg-amber-50/20',
+                          !currentStatus && 'hover:bg-slate-50/50'
+                        )}
+                      >
+                        {/* Student Info */}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-4 text-[10px] text-slate-400 font-mono text-center shrink-0">
+                            {idx + 1}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-mono text-[11px] font-bold text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
+                                {student.student_id}
+                              </span>
+                              <span className="font-bold text-xs sm:text-sm text-slate-900 truncate">
+                                {student.name}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Touch-Friendly P / A / OD Button Group */}
+                        <div className="flex items-center gap-1.5 self-stretch sm:self-auto shrink-0 mt-1 sm:mt-0">
+                          {/* P - Present */}
+                          <button
+                            type="button"
+                            onClick={() => markStudent(student.student_id, 'P')}
+                            className={cn(
+                              'flex-1 sm:flex-none h-11 min-w-[50px] sm:min-w-[62px] px-3 rounded-xl font-black text-xs sm:text-sm transition-all duration-100 flex items-center justify-center gap-1 select-none active:scale-95 cursor-pointer',
+                              currentStatus === 'P'
+                                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-500'
+                                : 'bg-white text-slate-600 border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50 hover:text-emerald-700'
+                            )}
+                          >
+                            <Check className={cn('w-3.5 h-3.5', currentStatus === 'P' ? 'stroke-[3]' : '')} />
+                            <span>P</span>
+                          </button>
+
+                          {/* A - Absent */}
+                          <button
+                            type="button"
+                            onClick={() => markStudent(student.student_id, 'A')}
+                            className={cn(
+                              'flex-1 sm:flex-none h-11 min-w-[50px] sm:min-w-[62px] px-3 rounded-xl font-black text-xs sm:text-sm transition-all duration-100 flex items-center justify-center gap-1 select-none active:scale-95 cursor-pointer',
+                              currentStatus === 'A'
+                                ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30 ring-2 ring-rose-500'
+                                : 'bg-white text-slate-600 border border-slate-200 hover:border-rose-300 hover:bg-rose-50/50 hover:text-rose-700'
+                            )}
+                          >
+                            <X className={cn('w-3.5 h-3.5', currentStatus === 'A' ? 'stroke-[3]' : '')} />
+                            <span>A</span>
+                          </button>
+
+                          {/* OD - On Duty */}
+                          <button
+                            type="button"
+                            onClick={() => markStudent(student.student_id, 'OD')}
+                            className={cn(
+                              'flex-1 sm:flex-none h-11 min-w-[50px] sm:min-w-[62px] px-3 rounded-xl font-black text-xs transition-all duration-100 flex items-center justify-center gap-1 select-none active:scale-95 cursor-pointer',
+                              currentStatus === 'OD'
+                                ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30 ring-2 ring-amber-400'
+                                : 'bg-white text-slate-600 border border-slate-200 hover:border-amber-300 hover:bg-amber-50/50 hover:text-amber-700'
+                            )}
+                          >
+                            <span>OD</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Sticky Save Action Bar */}
+          <div className="sticky bottom-3 z-20 bg-white/95 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border-2 border-slate-300 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs w-full sm:w-auto">
+              {!isAllMarked ? (
+                <div className="flex items-center gap-2 text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 font-bold w-full sm:w-auto text-xs">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                  <span>Mark all students ({stats.notMarked} remaining)</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 font-bold text-xs w-full sm:w-auto">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>All {stats.total} marked • Ready to save</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Button
+                variant="primary"
+                size="lg"
+                disabled={!isAllMarked || saving}
+                isLoading={saving}
+                onClick={handleSaveClick}
+                className={cn(
+                  'gap-2 w-full sm:w-auto font-black px-6 py-2.5 text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer',
+                  isMultiPeriod
+                    ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20'
+                    : isAlreadySaved
+                    ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20'
+                    : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
+                )}
+              >
+                <Save className="w-4 h-4" />
+                <span>
+                  {isMultiPeriod
+                    ? `Save All ${selectedPeriods.length} Periods`
+                    : isAlreadySaved
+                    ? 'Update Attendance'
+                    : 'Save Attendance'}
+                </span>
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ── Smart Automations & Quick Share Modal ── */}
       <AttendanceSummaryShareModal
