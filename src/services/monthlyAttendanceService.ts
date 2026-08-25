@@ -28,15 +28,22 @@ export const ACADEMIC_MONTHS = [
   { value: '2026-10', label: 'October 2026' },
   { value: '2026-11', label: 'November 2026' },
   { value: '2026-12', label: 'December 2026' },
+  { value: '2027-01', label: 'January 2027' },
+  { value: '2027-02', label: 'February 2027' },
+  { value: '2027-03', label: 'March 2027' },
+  { value: '2027-04', label: 'April 2027' },
+  { value: '2027-05', label: 'May 2027' },
+  { value: '2027-06', label: 'June 2027' },
 ];
 
 export const MULTI_MONTH_PRESETS = [
+  { id: 'unlimited-all-time', label: '🌟 All Time / Unlimited (All Dates)', start: '2026-06-01', end: '2027-05-31' },
+  { id: '6m-semester', label: 'Full Semester (Jul – Dec 2026)', start: '2026-07-01', end: '2026-12-31' },
   { id: '2m-jul-aug', label: '2 Months (Jul – Aug 2026)', start: '2026-07-01', end: '2026-08-31' },
   { id: '2m-aug-sep', label: '2 Months (Aug – Sep 2026)', start: '2026-08-01', end: '2026-09-30' },
   { id: '3m-jul-sep', label: '3 Months (Jul – Sep 2026)', start: '2026-07-01', end: '2026-09-30' },
   { id: '3m-aug-oct', label: '3 Months (Aug – Oct 2026)', start: '2026-08-01', end: '2026-10-31' },
-  { id: '6m-semester', label: 'Full Semester (Jul – Dec 2026)', start: '2026-07-01', end: '2026-12-31' },
-  { id: '5m-semester', label: '5 Months (Aug – Dec 2026)', start: '2026-08-01', end: '2026-12-31' },
+  { id: 'full-academic-year', label: 'Full Academic Year (Jun 2026 – May 2027)', start: '2026-06-01', end: '2027-05-31' },
 ];
 
 const LOCAL_STORAGE_ATTENDANCE_KEY = 'smart_cr_attendance_records';

@@ -9,15 +9,15 @@ import { CheckCircle2, Users, BookOpen } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { NavLink } from 'react-router-dom';
 
-type RangePreset = 'july' | 'august' | 'september' | '2m-jul-aug' | '2m-aug-sep' | 'semester' | 'custom';
+type RangePreset = 'july' | 'august' | 'september' | '2m-jul-aug' | '2m-aug-sep' | 'semester' | 'unlimited' | 'custom';
 
 export const BacklogEntryPage: React.FC = () => {
   const { selectedClass, setSelectedClassId } = useApp();
   const { students } = useStudents(selectedClass.id);
 
   const [preset, setPreset] = useState<RangePreset>('july');
-  const [customStart, setCustomStart] = useState<string>('2026-07-01');
-  const [customEnd, setCustomEnd] = useState<string>('2026-09-30');
+  const [customStart, setCustomStart] = useState<string>('2026-06-01');
+  const [customEnd, setCustomEnd] = useState<string>('2027-05-31');
 
   // Compute active date boundaries
   const { startDate, endDate } = useMemo(() => {
@@ -55,6 +55,12 @@ export const BacklogEntryPage: React.FC = () => {
       return {
         startDate: '2026-07-01',
         endDate: '2026-12-31',
+      };
+    }
+    if (preset === 'unlimited') {
+      return {
+        startDate: '2026-06-01',
+        endDate: '2027-05-31',
       };
     }
     return {
@@ -172,6 +178,18 @@ export const BacklogEntryPage: React.FC = () => {
                 )}
               >
                 Full Semester
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreset('unlimited')}
+                className={cn(
+                  'py-1.5 px-3 rounded-xl transition-all cursor-pointer',
+                  preset === 'unlimited'
+                    ? 'bg-white text-emerald-700 shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                )}
+              >
+                🌟 Unlimited
               </button>
               <button
                 type="button"
