@@ -35,7 +35,7 @@ export const NetworkStatusBar: React.FC = () => {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="fixed bottom-20 sm:bottom-4 right-3 sm:right-4 z-50 animate-in fade-in slide-in-from-bottom-2 duration-300 pointer-events-auto">
       {/* 1. Offline Mode Pill */}
       {!status.isOnline && (
         <div className="bg-amber-900/90 backdrop-blur-md text-amber-100 border border-amber-600/50 px-3.5 py-2 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-bold">

@@ -100,6 +100,16 @@ export const OneByOneAttendanceCard: React.FC<OneByOneAttendanceCardProps> = ({
   const handleMark = useCallback(
     (status: AttendanceStatus) => {
       if (!currentStudent) return;
+
+      // Haptic feedback for mobile phones
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try {
+          navigator.vibrate(25);
+        } catch {
+          // ignore
+        }
+      }
+
       onMarkStudent(currentStudent.student_id, status);
 
       if (autoAdvance) {
