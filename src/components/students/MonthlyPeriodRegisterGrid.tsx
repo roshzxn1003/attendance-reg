@@ -12,6 +12,11 @@ import {
   Layers,
   CalendarRange,
   ArrowRight,
+  Users,
+  CalendarDays,
+  BookOpen,
+  Percent,
+  AlertTriangle,
 } from 'lucide-react';
 import { ClassId } from '../../types';
 import { Student } from '../../services/studentService';
@@ -382,65 +387,87 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
         </CardContent>
       </Card>
 
-      {/* ── Summary Overview Bar ── */}
-      {matrixData && (
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 print:grid-cols-5">
-          <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Total Students
-            </div>
-            <p className="text-2xl font-black text-slate-900 mt-1">
-              {matrixData.students.length}
-            </p>
-          </div>
+      {/* ── Summary Overview KPI Cards ── */}
+      {matrixData && (() => {
+        const workingDays = matrixData.dateColumns.filter(c => c.hasAttendance).length;
+        const totalPeriods = workingDays * 7;
+        const eligibleCount = matrixData.students.filter(s => s.percentage >= 75).length;
+        const shortageCount = matrixData.students.filter(s => s.totalWorking > 0 && s.percentage < 75).length;
 
-          <div className="p-3.5 bg-emerald-50/70 rounded-2xl border border-emerald-200 shadow-2xs">
-            <div className="text-[11px] font-bold uppercase tracking-wide text-emerald-800">
-              Total Present Hours
-            </div>
-            <p className="text-2xl font-black text-emerald-800 mt-1">
-              {matrixData.totalClassPresentHours}
-              <span className="text-xs font-normal text-emerald-600 ml-1">hrs</span>
-            </p>
-          </div>
+        return (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 print:grid-cols-6">
 
-          <div className="p-3.5 bg-amber-50/70 rounded-2xl border border-amber-200 shadow-2xs">
-            <div className="text-[11px] font-bold uppercase tracking-wide text-amber-800">
-              Total OD Hours
+            {/* 1 — Total Students */}
+            <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Students</span>
+                <Users className="w-3.5 h-3.5 text-slate-300" />
+              </div>
+              <p className="text-2xl font-black text-slate-900">{matrixData.students.length}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Active in class</p>
             </div>
-            <p className="text-2xl font-black text-amber-800 mt-1">
-              {matrixData.totalClassODHours}
-              <span className="text-xs font-normal text-amber-600 ml-1">hrs</span>
-            </p>
-          </div>
 
-          <div className="p-3.5 bg-rose-50/70 rounded-2xl border border-rose-200 shadow-2xs">
-            <div className="text-[11px] font-bold uppercase tracking-wide text-rose-800">
-              Total Absent Hours
+            {/* 2 — Working Days */}
+            <div className="p-3.5 bg-blue-50/70 rounded-2xl border border-blue-200 shadow-2xs">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Working Days</span>
+                <CalendarDays className="w-3.5 h-3.5 text-blue-300" />
+              </div>
+              <p className="text-2xl font-black text-blue-900">{workingDays}</p>
+              <p className="text-[10px] text-blue-500 mt-0.5">Dates with attendance</p>
             </div>
-            <p className="text-2xl font-black text-rose-800 mt-1">
-              {matrixData.totalClassAbsentHours}
-              <span className="text-xs font-normal text-rose-600 ml-1">hrs</span>
-            </p>
-          </div>
 
-          <div className="p-3.5 bg-slate-900 rounded-2xl border border-slate-800 shadow-2xs text-white">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              Average Attendance
+            {/* 3 — Periods Conducted */}
+            <div className="p-3.5 bg-indigo-50/70 rounded-2xl border border-indigo-200 shadow-2xs">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">Periods Conducted</span>
+                <BookOpen className="w-3.5 h-3.5 text-indigo-300" />
+              </div>
+              <p className="text-2xl font-black text-indigo-900">{totalPeriods}</p>
+              <p className="text-[10px] text-indigo-500 mt-0.5">{workingDays} days × 7 periods</p>
             </div>
-            <p className="text-2xl font-black text-white mt-1">
-              {matrixData.totalClassWorkingHours > 0 ? (
-                <>
-                  {matrixData.classAveragePercentage.toFixed(1)}
-                  <span className="text-sm font-normal text-slate-400 ml-0.5">%</span>
-                </>
-              ) : (
-                '—'
-              )}
-            </p>
+
+            {/* 4 — Average Attendance % */}
+            <div className="p-3.5 bg-slate-900 rounded-2xl border border-slate-800 shadow-2xs text-white">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Avg Attendance</span>
+                <Percent className="w-3.5 h-3.5 text-slate-500" />
+              </div>
+              <p className="text-2xl font-black text-white">
+                {matrixData.totalClassWorkingHours > 0 ? (
+                  <>
+                    {matrixData.classAveragePercentage.toFixed(1)}
+                    <span className="text-sm font-normal text-slate-400 ml-0.5">%</span>
+                  </>
+                ) : '—'}
+              </p>
+              <p className="text-[10px] text-slate-500 mt-0.5">Class average</p>
+            </div>
+
+            {/* 5 — Eligible Students ≥75% */}
+            <div className="p-3.5 bg-emerald-50/70 rounded-2xl border border-emerald-200 shadow-2xs">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Eligible (≥75%)</span>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              </div>
+              <p className="text-2xl font-black text-emerald-800">{eligibleCount}</p>
+              <p className="text-[10px] text-emerald-600 mt-0.5">Safe for exams</p>
+            </div>
+
+            {/* 6 — Shortage Students <75% */}
+            <div className="p-3.5 bg-rose-50/70 rounded-2xl border border-rose-200 shadow-2xs">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700">Shortage (&lt;75%)</span>
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+              </div>
+              <p className="text-2xl font-black text-rose-800">{shortageCount}</p>
+              <p className="text-[10px] text-rose-600 mt-0.5">Need attention</p>
+            </div>
+
           </div>
-        </div>
-      )}
+        );
+      })()}
+
 
       {/* ── Search & View Navigation Bar (With Right-Side Totals Locking Controls) ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 print:hidden bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs">
