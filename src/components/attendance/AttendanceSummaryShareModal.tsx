@@ -1,16 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   X,
   Copy,
   Check,
   Share2,
   Download,
-  Sparkles,
   MessageCircle,
   FileText,
   Clock,
   Calendar,
-  XCircle,
 } from 'lucide-react';
 import { ClassId, PeriodNumber, AttendanceStatus, StudentAttendanceSummary } from '../../types';
 import { Student } from '../../services/studentService';
@@ -60,6 +58,15 @@ export const AttendanceSummaryShareModal: React.FC<AttendanceSummaryShareModalPr
   const [copied, setCopied] = useState(false);
   const toast = useToast();
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   const activeStudents = useMemo(() => students.filter((s) => s.active !== false), [students]);
 
   // Group date records by student_id and period_number
@@ -73,6 +80,27 @@ export const AttendanceSummaryShareModal: React.FC<AttendanceSummaryShareModalPr
     }
     return map;
   }, [dateRecords]);
+
+  // Per-period presentees / absentees / OD breakdown
+  const periodAttendanceDetails = useMemo(() => {
+    const completedPeriods = dailyOverview?.completedPeriodNumbers || [];
+    const map: Record<number, { presentList: Student[]; absentList: Student[]; odList: Student[]; subject: string }> = {};
+    for (const p of completedPeriods) {
+      const presentList: Student[] = [];
+      const absentList: Student[] = [];
+      const odList: Student[] = [];
+      const subj = dayOrderNumber ? getSubjectForSlot(dayOrderNumber as any, p, classId) : `Period ${p}`;
+      for (const s of activeStudents) {
+        const mark = studentPeriodMarks[s.student_id]?.[p];
+        if (mark === 'P') presentList.push(s);
+        else if (mark === 'A') absentList.push(s);
+        else if (mark === 'OD') odList.push(s);
+      }
+      map[p] = { presentList, absentList, odList, subject: subj };
+    }
+    return { map, completedPeriods };
+  }, [activeStudents, studentPeriodMarks, dailyOverview, dayOrderNumber, classId]);
+
 
   // ── Period Calculations ──
   const periodStats = useMemo(() => {
@@ -174,13 +202,14 @@ export const AttendanceSummaryShareModal: React.FC<AttendanceSummaryShareModalPr
     };
   }, [todaySummaries, activeStudents, dailyOverview, studentPeriodMarks, dayOrderNumber, classId]);
 
-  // ── Generate Formatted Text ──
   const generatedText = useMemo(() => {
     const formattedDate = formatDate(date);
     const dayLabel = dayOrderNumber ? `Day Order ${dayOrderNumber}` : '';
     const periodLabel = selectedPeriods.length === 1
       ? `Period ${selectedPeriods[0]}`
-      : `Periods ${selectedPeriods.join(', ')}`;
+      : selectedPeriods.length > 1
+      ? `Periods ${selectedPeriods.join(', ')}`
+      : 'Period';
 
     if (scope === 'period') {
       const { presentList, absentList, odList, total, presentCount, absentCount, odCount, percentage } = periodStats;
@@ -188,173 +217,160 @@ export const AttendanceSummaryShareModal: React.FC<AttendanceSummaryShareModalPr
       if (format === 'standard') {
         let txt = `*SPIHER Attendance Report*\n`;
         txt += `Class: ${classId} (${classNameTitle})\n`;
-        txt += `Date: ${formattedDate} ${dayLabel ? `| ${dayLabel}` : ''}\n`;
-        txt += `Period: ${periodLabel} ${subject ? `(${subject})` : ''}\n\n`;
+        txt += `Date: ${formattedDate}${dayLabel ? ` | ${dayLabel}` : ''}\n`;
+        txt += `Period: ${periodLabel}${subject ? ` (${subject})` : ''}\n\n`;
 
+        // Presentees first
+        txt += `*Presentees (${presentCount + odCount}/${total}):*\n`;
+        if (presentList.length === 0 && odCount === 0) {
+          txt += `Nil (No students present)\n`;
+        } else {
+          let idx = 1;
+          presentList.forEach((s) => {
+            txt += `${idx++}. ${s.name} (${s.student_id})\n`;
+          });
+          odList.forEach((s) => {
+            txt += `${idx++}. ${s.name} (${s.student_id})\n`;
+          });
+        }
+        txt += `\n`;
+
+        // Absentees
         txt += `*Absentees (${absentCount}):*\n`;
         if (absentList.length === 0) {
           txt += `Nil (All students present)\n`;
         } else {
-          absentList.forEach((s, idx) => {
-            txt += `${idx + 1}. ${s.name} (${s.student_id})\n`;
+          absentList.forEach((s, i) => {
+            txt += `${i + 1}. ${s.name} (${s.student_id})\n`;
           });
         }
         txt += `\n`;
 
+        // OD section
         if (odCount > 0) {
           txt += `*On Duty (${odCount}):*\n`;
-          odList.forEach((s, idx) => {
-            txt += `${idx + 1}. ${s.name} (${s.student_id})\n`;
+          odList.forEach((s, i) => {
+            txt += `${i + 1}. ${s.name} (${s.student_id})\n`;
           });
           txt += `\n`;
         }
 
-        txt += `*Presentees (${presentCount}/${total}):*\n`;
-        if (presentList.length === 0) {
-          txt += `- None\n`;
-        } else {
-          presentList.forEach((s, idx) => {
-            txt += `${idx + 1}. ${s.name} (${s.student_id})\n`;
-          });
-        }
-        txt += `\n`;
-
-        txt += `*Summary:* Total Present: *${presentCount}/${total}* | Total Absent: *${absentCount}* | Attendance: *${percentage}%*`;
+        txt += `*Summary:* Total Present: *${presentCount + odCount}/${total}* | Total Absent: *${absentCount}* | Attendance: *${percentage}%*`;
         return txt;
       }
 
       if (format === 'compact') {
         let txt = `*SPIHER — ${classId} | ${formattedDate}*\n`;
         txt += `*${periodLabel}* (${subject || 'Class'})\n\n`;
-
         txt += `*Absentees (${absentCount}):*\n`;
-        if (absentList.length === 0) {
-          txt += `100% Present (No absentees)\n`;
-        } else {
-          absentList.forEach((s, idx) => {
-            txt += `${idx + 1}. ${s.name} (${s.student_id})\n`;
-          });
-        }
-
-        if (odCount > 0) {
-          txt += `\n*OD (${odCount}):* ${odList.map((s) => s.name).join(', ')}\n`;
-        }
-
-        txt += `\n*Total Present: ${presentCount}/${total}* | *Total Absent: ${absentCount}* | *${percentage}%*`;
+        if (absentList.length === 0) txt += `All Present (Nil Absentees)\n`;
+        else absentList.forEach((s, idx) => txt += `${idx + 1}. ${s.name} (${s.student_id})\n`);
+        if (odCount > 0) txt += `\n*OD (${odCount}):* ${odList.map((s) => s.name).join(', ')}\n`;
+        txt += `\n*Present: ${presentCount + odCount}/${total}* | *${percentage}%*`;
         return txt;
       }
 
-      // Complete Detailed Format
       let txt = `========================================\n`;
-      txt += `SPIHER - DEPARTMENT OF COMPUTER SCIENCE & AI\n`;
-      txt += `DAILY PERIOD ATTENDANCE REPORT\n`;
+      txt += `SPIHER PERIOD ATTENDANCE AUDIT\n`;
       txt += `========================================\n`;
-      txt += `Class       : ${classId} - ${classNameTitle}\n`;
-      txt += `Date        : ${formattedDate} (${dayLabel})\n`;
-      txt += `Period(s)   : ${periodLabel}\n`;
-      txt += `Subject     : ${subject || 'N/A'}\n`;
-      txt += `----------------------------------------\n`;
-      txt += `TOTAL ENROLLED : ${total}\n`;
-      txt += `PRESENT (P)    : ${presentCount}\n`;
-      txt += `ABSENT (A)     : ${absentCount}\n`;
-      txt += `ON DUTY (OD)   : ${odCount}\n`;
-      txt += `PERCENTAGE     : ${percentage}%\n`;
+      txt += `Class     : ${classId} - ${classNameTitle}\n`;
+      txt += `Date      : ${formattedDate} (${dayLabel})\n`;
+      txt += `Period    : ${periodLabel}\n`;
+      txt += `Subject   : ${subject || 'N/A'}\n`;
+      txt += `Enrolled  : ${total}\n`;
+      txt += `Present   : ${presentCount}\n`;
+      txt += `On Duty   : ${odCount}\n`;
+      txt += `Absent    : ${absentCount}\n`;
+      txt += `Rate      : ${percentage}%\n`;
       txt += `----------------------------------------\n\n`;
-
       txt += `--- ABSENTEES LIST (${absentCount}) ---\n`;
-      if (absentList.length === 0) {
-        txt += `None (All students attended)\n`;
-      } else {
-        absentList.forEach((s, idx) => {
-          txt += `${String(idx + 1).padStart(2, ' ')}. [${s.student_id}] ${s.name}\n`;
-        });
-      }
-
-      txt += `\n--- PRESENTEES LIST (${presentCount}) ---\n`;
-      if (presentList.length === 0) {
-        txt += `None\n`;
-      } else {
-        presentList.forEach((s, idx) => {
-          txt += `${String(idx + 1).padStart(2, ' ')}. [${s.student_id}] ${s.name}\n`;
-        });
-      }
-
+      if (absentList.length === 0) txt += `Nil\n`;
+      else absentList.forEach((s, idx) => txt += `${String(idx + 1).padStart(2, ' ')}. [${s.student_id}] ${s.name}\n`);
       if (odCount > 0) {
         txt += `\n--- ON DUTY LIST (${odCount}) ---\n`;
-        odList.forEach((s, idx) => {
-          txt += `${String(idx + 1).padStart(2, ' ')}. [${s.student_id}] ${s.name}\n`;
-        });
+        odList.forEach((s, idx) => txt += `${String(idx + 1).padStart(2, ' ')}. [${s.student_id}] ${s.name}\n`);
       }
-
-      txt += `\n========================================\n`;
-      txt += `Generated via SPIHER CR Attendance Portal\n`;
       return txt;
     }
 
-    // ── Full Day Report ──
-    const fullAbs = fullDayStats?.fullAbsentees || [];
-    const partAbs = fullDayStats?.partialAbsentees || [];
-    const odSts = fullDayStats?.odStudents || [];
-    const ov = dailyOverview;
+    if (!fullDayStats) return `SPIHER Attendance Report - ${classId}\nDate: ${formattedDate}\n\nNo full day records marked yet today.`;
+    const { fullAbsentees, partialAbsentees, odStudents, overview } = fullDayStats;
+    const workingHours = overview?.totalPeriods || 7;
 
-    let txt = `*🎓 SPIHER Full Day Attendance Report*\n`;
-    txt += `*Class:* ${classId} (${classNameTitle})\n`;
-    txt += `*Date:* ${formattedDate} ${dayLabel ? `| ${dayLabel}` : ''}\n`;
-    txt += `*Periods Completed:* ${ov ? `${ov.periodsCompleted} / ${ov.totalPeriods}` : '7'}\n\n`;
-
-    txt += `*🔴 Absentees Breakdown (${fullAbs.length + partAbs.length} Students):*\n`;
-
-    if (fullAbs.length > 0) {
-      txt += `\n*• Full-Day Absentees (${fullAbs.length}):*\n`;
-      fullAbs.forEach(({ student }, idx) => {
-        txt += `  ${idx + 1}. ${student.name} (${student.student_id})\n`;
-      });
+    if (format === 'standard') {
+      let txt = `*SPIHER Daily Attendance Report*\n`;
+      txt += `Class: ${classId} (${classNameTitle})\n`;
+      txt += `Date: ${formattedDate}${dayLabel ? ` | ${dayLabel}` : ''}\n`;
+      txt += `Working Periods: ${overview?.periodsCompleted || 0}/${workingHours}\n\n`;
+      txt += `*1. Full-Day Absentees (${fullAbsentees.length}):*\n`;
+      fullAbsentees.length === 0 ? txt += `Nil\n` : fullAbsentees.forEach(({ student }, idx) => txt += `${idx + 1}. ${student.name} (${student.student_id})\n`);
+      txt += `\n*2. Period-Wise Absentees (${partialAbsentees.length}):*\n`;
+      partialAbsentees.length === 0 ? txt += `Nil\n` : partialAbsentees.forEach(({ student, absentPeriods }, idx) => txt += `${idx + 1}. ${student.name} (${student.student_id}) - ${absentPeriods.map((ap) => `P${ap.period}`).join(', ')}\n`);
+      if (odStudents.length > 0) {
+        txt += `\n*3. On Duty Students (${odStudents.length}):*\n`;
+        odStudents.forEach(({ student, odPeriods }, idx) => txt += `${idx + 1}. ${student.name} (${student.student_id}) - ${odPeriods.map((op) => `P${op.period}`).join(', ')}\n`);
+      }
+      if (periodAttendanceDetails.completedPeriods.length > 0) {
+        txt += `\n*⏱️ Period-Wise Attendance:*\n`;
+        periodAttendanceDetails.completedPeriods.forEach((p) => {
+          const pInfo = periodAttendanceDetails.map[p];
+          if (pInfo) {
+            const pAttended = pInfo.presentList.length + pInfo.odList.length;
+            const pPct = activeStudents.length > 0 ? Math.round((pAttended / activeStudents.length) * 100) : 0;
+            txt += `\n*Period ${p} (${pInfo.subject}) — ${pPct}% (${pAttended}/${activeStudents.length})*\n`;
+            txt += `✅ *Present (${pInfo.presentList.length}):* ${pInfo.presentList.length > 0 ? pInfo.presentList.map((s) => s.name).join(', ') : 'None'}\n`;
+            if (pInfo.odList.length > 0) txt += `🟡 *OD (${pInfo.odList.length}):* ${pInfo.odList.map((s) => s.name).join(', ')}\n`;
+            txt += `❌ *Absent (${pInfo.absentList.length}):* ${pInfo.absentList.length > 0 ? pInfo.absentList.map((s) => s.name).join(', ') : 'Nil'}\n`;
+          }
+        });
+      }
+      txt += `\n*Summary:* Avg Attendance: *${overview ? overview.attendancePercentage.toFixed(1) : 0}%* | Total Enrolled: *${activeStudents.length}*`;
+      return txt;
     }
 
-    if (partAbs.length > 0) {
-      txt += `\n*• Period-Wise Absentees (${partAbs.length}):*\n`;
-      partAbs.forEach(({ student, absentPeriods, presentHours, totalWorking }, idx) => {
-        const pText = absentPeriods.length > 0
-          ? absentPeriods.map((ap) => `P${ap.period} (${ap.subject})`).join(', ')
-          : 'Specific periods';
-        txt += `  ${idx + 1}. ${student.name} (${student.student_id})\n     ↳ Absent in: *${pText}* (${presentHours}/${totalWorking} hrs attended)\n`;
-      });
+    if (format === 'compact') {
+      let txt = `*SPIHER Attendance — ${classId} | ${formattedDate}*\n\n`;
+      if (fullAbsentees.length > 0) {
+        txt += `*Full Day Absent (${fullAbsentees.length}):*\n`;
+        fullAbsentees.forEach(({ student }, idx) => txt += `${idx + 1}. ${student.name} (${student.student_id})\n`);
+        txt += `\n`;
+      }
+      if (partialAbsentees.length > 0) {
+        txt += `*Period Absent (${partialAbsentees.length}):*\n`;
+        partialAbsentees.forEach(({ student, absentPeriods }, idx) => txt += `${idx + 1}. ${student.name} (${absentPeriods.map((p) => `P${p.period}`).join(',')})\n`);
+        txt += `\n`;
+      }
+      if (fullAbsentees.length === 0 && partialAbsentees.length === 0) txt += `🎉 100% Attendance Today! No Absentees.\n\n`;
+      txt += `*Overall: ${overview ? overview.attendancePercentage.toFixed(1) : 0}%* (${overview?.periodsCompleted || 0}/${workingHours} periods)`;
+      return txt;
     }
 
-    if (fullAbs.length === 0 && partAbs.length === 0) {
-      txt += `*✓ 100% Attendance for All Periods Today*\n`;
-    }
-
-    if (odSts.length > 0) {
-      txt += `\n*🟡 On Duty (OD) (${odSts.length}):*\n`;
-      odSts.forEach(({ student, odPeriods }, idx) => {
-        txt += `  ${idx + 1}. ${student.name} (${student.student_id}) — ${odPeriods.map((o) => `P${o.period} (${o.subject})`).join(', ')}\n`;
-      });
-    }
-
-    if (ov) {
-      txt += `\n*Day Summary Stats:*\n`;
-      txt += `• Total Enrolled: *${activeStudents.length}*\n`;
-      txt += `• Present Hours: *${ov.presentCount} hrs*\n`;
-      txt += `• Absent Hours: *${ov.absentCount} hrs*\n`;
-      txt += `• OD Hours: *${ov.odCount} hrs*\n`;
-      txt += `• Day Attendance: *${ov.attendancePercentage.toFixed(1)}%*\n`;
-    }
-
+    let txt = `=====================================================\n`;
+    txt += `SPIHER COMPREHENSIVE DAILY ATTENDANCE AUDIT\n`;
+    txt += `=====================================================\n`;
+    txt += `Class           : ${classId} - ${classNameTitle}\n`;
+    txt += `Date            : ${formattedDate} (${dayLabel})\n`;
+    txt += `Total Enrolled  : ${activeStudents.length} Students\n`;
+    txt += `Periods Marked  : ${overview?.periodsCompleted || 0} of ${workingHours}\n`;
+    txt += `Avg Attendance  : ${overview ? overview.attendancePercentage.toFixed(1) : 0}%\n`;
+    txt += `-----------------------------------------------------\n\n`;
+    txt += `1. FULL DAY ABSENTEES (${fullAbsentees.length})\n`;
+    fullAbsentees.length === 0 ? txt += `   Nil\n` : fullAbsentees.forEach(({ student }, idx) => txt += `   ${String(idx + 1).padStart(2, ' ')}. [${student.student_id}] ${student.name}\n`);
+    txt += `\n2. PARTIAL / PERIOD-WISE ABSENTEES (${partialAbsentees.length})\n`;
+    partialAbsentees.length === 0 ? txt += `   Nil\n` : partialAbsentees.forEach(({ student, absentPeriods, presentHours, totalWorking }, idx) => txt += `   ${String(idx + 1).padStart(2, ' ')}. [${student.student_id}] ${student.name} - Attended ${presentHours}/${totalWorking} hrs | Absent: ${absentPeriods.map((ap) => `P${ap.period}`).join(', ')}\n`);
     return txt;
-  }, [scope, format, date, dayOrderNumber, selectedPeriods, subject, classId, classNameTitle, periodStats, fullDayStats, dailyOverview, activeStudents]);
+  }, [scope, format, date, dayOrderNumber, selectedPeriods, classId, classNameTitle, subject, periodStats, fullDayStats, activeStudents, periodAttendanceDetails]);
 
   if (!isOpen) return null;
 
-  // ── Actions ──
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(generatedText);
       setCopied(true);
-      toast.success('Report copied to clipboard ready to paste!', 'Copied');
+      toast.success('Report copied to clipboard!', 'Copied');
       setTimeout(() => setCopied(false), 2500);
     } catch {
-      toast.error('Failed to copy to clipboard', 'Error');
+      toast.error('Failed to copy', 'Error');
     }
   };
 
@@ -366,13 +382,8 @@ export const AttendanceSummaryShareModal: React.FC<AttendanceSummaryShareModalPr
   const handleNativeShare = async () => {
     if (navigator.share) {
       try {
-        await navigator.share({
-          title: `SPIHER ${classId} Attendance - ${formatDate(date)}`,
-          text: generatedText,
-        });
-      } catch {
-        // User cancelled share
-      }
+        await navigator.share({ title: `Attendance - ${classId}`, text: generatedText });
+      } catch {}
     } else {
       handleWhatsAppShare();
     }
@@ -386,205 +397,191 @@ export const AttendanceSummaryShareModal: React.FC<AttendanceSummaryShareModalPr
     link.download = `${classId}_Attendance_${date}.txt`;
     link.click();
     URL.revokeObjectURL(url);
-    toast.success('Downloaded report text file', 'Downloaded');
+    toast.success('Downloaded report', 'Downloaded');
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-xl w-full overflow-hidden flex flex-col max-h-[92vh]">
-        {/* Header */}
-        <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-950 text-white flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center text-blue-300 shadow-inner">
-              <Sparkles className="w-5 h-5" />
+    <div
+      className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-0 sm:p-4 animate-in fade-in duration-150"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="bg-white shadow-2xl border-0 sm:border border-slate-200 w-full h-[100dvh] sm:h-[88vh] sm:max-w-2xl sm:rounded-3xl overflow-hidden flex flex-col">
+        <div className="p-3 sm:p-4 bg-gradient-to-r from-emerald-950 via-slate-900 to-indigo-950 text-white flex items-center justify-between shrink-0 border-b border-emerald-500/20">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center justify-center shadow-inner shrink-0">
+              <MessageCircle className="w-5 h-5 fill-current" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm sm:text-base font-black">Smart Attendance Share</h3>
-                <Badge variant="purple" size="sm" className="font-bold">
-                  {classId}
-                </Badge>
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <h3 className="text-sm sm:text-base font-black tracking-tight">Smart Attendance Share</h3>
+                <Badge variant="success" size="sm" className="font-extrabold">{classId}</Badge>
+                {dayOrderNumber && (
+                  <Badge variant="purple" size="sm" className="font-bold">
+                    DO {dayOrderNumber}
+                  </Badge>
+                )}
               </div>
-              <p className="text-[11px] text-slate-300">
-                Generate formatted reports for WhatsApp, Telegram & Faculty
+              <p className="text-[10px] sm:text-[11px] text-slate-300 line-clamp-1">
+                {formatDate(date)} • 1-Click WhatsApp & Export Roster
               </p>
             </div>
           </div>
-
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+            className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer shrink-0"
+            title="Close"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Content Body */}
-        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 text-slate-900">
-          {/* Controls: Scope & Format */}
-          <div className="space-y-3">
-            {/* Scope Selection Tabs */}
-            <div>
-              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
+        <div className="p-3 sm:p-4 flex-1 min-h-0 flex flex-col space-y-2.5 text-slate-900 overflow-hidden">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 shrink-0">
+            <div className="space-y-1">
+              <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
                 Report Scope:
               </label>
-              <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-2xl text-xs font-bold">
+              <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl text-xs font-bold">
                 <button
                   type="button"
                   onClick={() => setScope('period')}
                   className={cn(
-                    'py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer',
+                    'py-1.5 px-2 rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer',
                     scope === 'period'
-                      ? 'bg-white text-blue-700 shadow-xs font-black'
+                      ? 'bg-emerald-600 text-white shadow-xs font-black'
                       : 'text-slate-600 hover:text-slate-900'
                   )}
                 >
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>Current Period ({selectedPeriods.length === 1 ? `P${selectedPeriods[0]}` : `P${selectedPeriods.join(', ')}`})</span>
+                  <Clock className="w-3.5 h-3.5 shrink-0" />
+                  <span>Period ({selectedPeriods.length === 1 ? `P${selectedPeriods[0]}` : selectedPeriods.length > 1 ? `P${selectedPeriods.join(',')}` : 'P1'})</span>
                 </button>
-
                 <button
                   type="button"
                   onClick={() => setScope('fullday')}
                   className={cn(
-                    'py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer',
+                    'py-1.5 px-2 rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer',
                     scope === 'fullday'
-                      ? 'bg-white text-indigo-700 shadow-xs font-black'
+                      ? 'bg-emerald-600 text-white shadow-xs font-black'
                       : 'text-slate-600 hover:text-slate-900'
                   )}
                 >
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>Full Day Summary</span>
+                  <Calendar className="w-3.5 h-3.5 shrink-0" />
+                  <span>Full Day</span>
                 </button>
               </div>
             </div>
-
-            {/* Format Style Selector */}
-            <div>
-              <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1.5">
+            <div className="space-y-1">
+              <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
                 Format Style:
               </label>
-              <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-2xl text-[11px] font-bold">
+              <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-xl text-[11px] font-bold">
                 <button
                   type="button"
                   onClick={() => setFormat('standard')}
                   className={cn(
-                    'py-1.5 px-2 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer',
+                    'py-1.5 px-1 rounded-lg transition-all text-center cursor-pointer',
                     format === 'standard'
-                      ? 'bg-white text-blue-700 shadow-xs font-black'
+                      ? 'bg-white text-slate-950 shadow-xs font-black border border-slate-200/80'
                       : 'text-slate-600 hover:text-slate-900'
                   )}
                 >
-                  <MessageCircle className="w-3 h-3 text-emerald-600" />
-                  <span>WhatsApp</span>
+                  WhatsApp
                 </button>
-
                 <button
                   type="button"
                   onClick={() => setFormat('compact')}
                   className={cn(
-                    'py-1.5 px-2 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer',
+                    'py-1.5 px-1 rounded-lg transition-all text-center cursor-pointer',
                     format === 'compact'
-                      ? 'bg-white text-blue-700 shadow-xs font-black'
+                      ? 'bg-white text-slate-950 shadow-xs font-black border border-slate-200/80'
                       : 'text-slate-600 hover:text-slate-900'
                   )}
                 >
-                  <XCircle className="w-3 h-3 text-rose-600" />
-                  <span>Absentees Only</span>
+                  Short
                 </button>
-
                 <button
                   type="button"
                   onClick={() => setFormat('complete')}
                   className={cn(
-                    'py-1.5 px-2 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer',
+                    'py-1.5 px-1 rounded-lg transition-all text-center cursor-pointer',
                     format === 'complete'
-                      ? 'bg-white text-blue-700 shadow-xs font-black'
+                      ? 'bg-white text-slate-950 shadow-xs font-black border border-slate-200/80'
                       : 'text-slate-600 hover:text-slate-900'
                   )}
                 >
-                  <FileText className="w-3 h-3 text-slate-700" />
-                  <span>Detailed Doc</span>
+                  Doc
                 </button>
               </div>
             </div>
           </div>
-
-          {/* Live Text Preview Box */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5 text-blue-600" />
-                <span>Formatted Message Preview:</span>
-              </label>
-
+          <div className="flex-1 min-h-0 flex flex-col space-y-1">
+            <div className="flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-1.5 text-xs font-black text-slate-800">
+                <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Message Preview</span>
+              </div>
               <span className="text-[10px] font-mono text-slate-400">
                 {generatedText.split('\n').length} lines • {generatedText.length} chars
               </span>
             </div>
-
-            <div className="relative">
+            <div className="flex-1 min-h-0 relative">
               <textarea
                 readOnly
                 value={generatedText}
-                rows={10}
-                className="w-full p-3.5 bg-slate-900 text-emerald-400 font-mono text-xs rounded-2xl border border-slate-800 focus:outline-none select-all resize-none shadow-inner leading-relaxed"
+                className="w-full h-full p-3.5 bg-slate-950 text-emerald-400 font-mono text-xs rounded-2xl border border-slate-800 focus:outline-none select-all resize-none shadow-inner leading-relaxed overflow-y-auto"
               />
             </div>
+            <p className="text-[10px] text-emerald-700 font-bold text-right shrink-0">✓ Ready for CR WhatsApp Group</p>
           </div>
         </div>
 
-        {/* Footer Action Buttons */}
-        <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2.5 shrink-0">
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDownloadTxt}
-              className="gap-1 text-xs font-bold border-slate-300 flex-1 sm:flex-none"
-              title="Download as text file"
-            >
-              <Download className="w-3.5 h-3.5 text-slate-500" />
-              <span>Download .txt</span>
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            {/* Copy Button */}
+        <div className="p-3 sm:p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadTxt}
+            className="gap-1.5 text-xs font-bold border-slate-300 py-2 px-3 rounded-xl cursor-pointer bg-white hover:bg-slate-100 text-slate-700 shrink-0"
+            title="Download .txt"
+          >
+            <Download className="w-3.5 h-3.5 text-slate-500" />
+            <span className="hidden xs:inline">Download</span>
+            <span>.txt</span>
+          </Button>
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <Button
               variant="outline"
               size="sm"
               onClick={handleCopy}
               className={cn(
-                'gap-1.5 text-xs font-bold flex-1 sm:flex-none transition-all',
-                copied ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'border-slate-300'
+                'gap-1.5 text-xs font-bold py-2 px-3.5 rounded-xl transition-all cursor-pointer',
+                copied
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300 font-black'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
               )}
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" /> : <Copy className="w-3.5 h-3.5 text-slate-600" />}
-              <span>{copied ? 'Copied!' : 'Copy Text'}</span>
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
+              <span>{copied ? 'Copied!' : 'Copy'}</span>
             </Button>
-
-            {/* WhatsApp Share Button */}
             <Button
               variant="primary"
               size="sm"
               onClick={handleWhatsAppShare}
-              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-xs flex-1 sm:flex-none cursor-pointer"
+              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black py-2 px-3.5 sm:px-5 rounded-xl shadow-md shadow-emerald-500/20 cursor-pointer"
             >
-              <MessageCircle className="w-4 h-4 fill-current" />
+              <MessageCircle className="w-3.5 h-3.5 fill-current" />
               <span>Share to WhatsApp</span>
             </Button>
-
-            {/* Native device share (mobile) */}
             {typeof navigator !== 'undefined' && 'share' in navigator && (
               <button
                 type="button"
                 onClick={handleNativeShare}
-                className="p-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 transition-colors cursor-pointer hidden xs:flex items-center justify-center"
+                className="p-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 transition-colors cursor-pointer hidden sm:flex items-center justify-center"
                 title="More Share Options"
               >
-                <Share2 className="w-4 h-4" />
+                <Share2 className="w-3.5 h-3.5" />
               </button>
             )}
           </div>

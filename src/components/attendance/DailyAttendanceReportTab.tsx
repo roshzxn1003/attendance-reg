@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Calendar,
   Clock,
@@ -33,6 +33,7 @@ interface DailyAttendanceReportTabProps {
   todaySummaries: StudentAttendanceSummary[];
   dailyOverview: DailyAttendanceOverview;
   selectedPeriod?: PeriodNumber;
+  initialScope?: ReportScope;
 }
 
 type ReportScope = 'fullday' | 'period';
@@ -48,13 +49,26 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
   todaySummaries,
   dailyOverview,
   selectedPeriod = 1,
+  initialScope = 'period',
 }) => {
-  const [scope, setScope] = useState<ReportScope>('fullday');
+  const [scope, setScope] = useState<ReportScope>(initialScope);
   const [activePeriod, setActivePeriod] = useState<PeriodNumber>(selectedPeriod);
   const [format, setFormat] = useState<ReportFormat>('standard');
   const [copied, setCopied] = useState(false);
   const [showPresenteesList, setShowPresenteesList] = useState(false);
   const toast = useToast();
+
+  useEffect(() => {
+    if (initialScope) {
+      setScope(initialScope);
+    }
+  }, [initialScope]);
+
+  useEffect(() => {
+    if (selectedPeriod) {
+      setActivePeriod(selectedPeriod);
+    }
+  }, [selectedPeriod]);
 
   const activeStudents = useMemo(() => students.filter((s) => s.active !== false), [students]);
 
@@ -216,93 +230,81 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
       const totalAbsentStudents = fullAbsentees.length + partialAbsentees.length;
       const periodsCount = completedPeriods.length;
 
-      // ── FORMAT 1: WHATSAPP STANDARD ──
+      // ── FORMAT 1: WHATSAPP STANDARD (Full Day) ──
       if (format === 'standard') {
-        let txt = `*🎓 SPIHER — Daily Attendance Report*\n`;
-        txt += `*Class:* ${classId} (${classNameTitle})\n`;
-        txt += `*Date:* ${formattedDate} ${dayLabel ? `| ${dayLabel}` : ''}\n`;
-        txt += `*Periods Completed:* ${periodsCount}/7 Periods\n\n`;
+        let txt = `*SPIHER Attendance Report*\n`;
+        txt += `Class: ${classId} (${classNameTitle})\n`;
+        txt += `Date: ${formattedDate}${dayLabel ? ` | ${dayLabel}` : ''}\n`;
+        txt += `Period: Full Day (${periodsCount}/7 Periods Completed)\n\n`;
 
-        // Absentees Section
-        txt += `*🔴 Absentees Breakdown (${totalAbsentStudents} Students):*\n`;
-
-        if (fullAbsentees.length > 0) {
-          txt += `\n*• Full-Day Absentees (${fullAbsentees.length}):*\n`;
-          fullAbsentees.forEach(({ student }, idx) => {
-            txt += `  ${idx + 1}. ${student.name} (${student.student_id})\n`;
+        // Presentees Section
+        txt += `*Presentees (${fullPresentees.length}/${activeStudents.length}):*\n`;
+        if (fullPresentees.length === 0) {
+          txt += `Nil (No students fully present)\n`;
+        } else {
+          fullPresentees.forEach((s, idx) => {
+            txt += `${idx + 1}. ${s.name} (${s.student_id})\n`;
           });
         }
+        txt += `\n`;
 
-        if (partialAbsentees.length > 0) {
-          txt += `\n*• Period-Wise Absentees (${partialAbsentees.length}):*\n`;
-          partialAbsentees.forEach(({ student, absentPeriods, presentHours, totalWorking }, idx) => {
-            const periodsText = absentPeriods.map((ap) => `P${ap.period} [${ap.subject}]`).join(', ');
-            txt += `  ${idx + 1}. ${student.name} (${student.student_id})\n     ↳ Absent in: *${periodsText}* (Attended: ${presentHours}/${totalWorking} hrs)\n`;
+        // Absentees Section with who are all absent in which period
+        txt += `*Absentees (${totalAbsentStudents}):*\n`;
+        if (totalAbsentStudents === 0) {
+          txt += `Nil (All students present for all periods)\n`;
+        } else {
+          let aIdx = 1;
+          fullAbsentees.forEach(({ student }) => {
+            txt += `${aIdx++}. ${student.name} (${student.student_id}) - Full Day\n`;
+          });
+          partialAbsentees.forEach(({ student, absentPeriods }) => {
+            const periodsText = absentPeriods.map((ap) => ap.subject ? `P${ap.period} (${ap.subject})` : `P${ap.period}`).join(', ');
+            txt += `${aIdx++}. ${student.name} (${student.student_id}) - ${periodsText}\n`;
           });
         }
+        txt += `\n`;
 
-        if (fullAbsentees.length === 0 && partialAbsentees.length === 0) {
-          txt += `✓ *Nil (100% Attendance for all periods)*\n`;
-        }
-
-        // OD Section
+        // OD Section (if any)
         if (odStudents.length > 0) {
-          txt += `\n*🟡 On Duty (OD) (${odStudents.length}):*\n`;
+          txt += `*On Duty (${odStudents.length}):*\n`;
           odStudents.forEach(({ student, odPeriods }, idx) => {
-            const odText = odPeriods.map((op) => `P${op.period} (${op.subject})`).join(', ');
-            txt += `  ${idx + 1}. ${student.name} (${student.student_id}) — ${odText}\n`;
+            const odText = odPeriods.map((op) => op.subject ? `P${op.period} (${op.subject})` : `P${op.period}`).join(', ');
+            txt += `${idx + 1}. ${student.name} (${student.student_id}) - ${odText}\n`;
           });
+          txt += `\n`;
         }
 
-        // Present Summary
-        txt += `\n*🟢 Presentees Summary:*\n`;
-        txt += `• Full-Day Present: *${fullPresentees.length}/${activeStudents.length}*\n`;
-        txt += `• Overall Day Attendance: *${dailyOverview.attendancePercentage.toFixed(1)}%*\n\n`;
-
-        // Period-by-Period Matrix Breakdown
-        txt += `*⏱️ Period-Wise Attendance:*\n`;
-        completedPeriods.forEach((p) => {
-          const pData = periodAttendanceDetails[p];
-          if (pData) {
-            const absList = pData.absentList.map((s) => s.student_id.slice(-3)).join(', ');
-            const absSuffix = pData.absentCount > 0 ? ` | Absent: ${absList}` : ' | All Present';
-            txt += `• *P${p} (${pData.subject}):* ${pData.presentCount + pData.odCount}/${activeStudents.length} (${pData.percentage}%)${absSuffix}\n`;
-          }
-        });
-
-        txt += `\n_Generated via SPIHER CR Attendance Portal_`;
+        txt += `*Summary:* Total Present: *${fullPresentees.length}/${activeStudents.length}* | Total Absent: *${totalAbsentStudents}* | Attendance: *${dailyOverview.attendancePercentage.toFixed(1)}%*`;
         return txt;
       }
 
       // ── FORMAT 2: COMPACT / ABSENTEES ONLY ──
       if (format === 'compact') {
-        let txt = `*SPIHER ${classId} Absentees — ${formattedDate}*\n`;
-        txt += `*Day Order:* ${dayOrderNumber ? `DO ${dayOrderNumber}` : '—'} | *Periods Marked:* ${periodsCount}/7\n\n`;
+        let txt = `*SPIHER — ${classId} | ${formattedDate}*\n`;
+        txt += `*Full Day Summary* (${periodsCount}/7 Periods)\n\n`;
 
-        if (fullAbsentees.length > 0) {
-          txt += `*Full Day Absentees (${fullAbsentees.length}):*\n`;
-          fullAbsentees.forEach(({ student }, idx) => {
-            txt += `${idx + 1}. ${student.name} (${student.student_id})\n`;
+        txt += `*Absentees (${totalAbsentStudents}):*\n`;
+        if (totalAbsentStudents === 0) {
+          txt += `All Present (Nil Absentees)\n`;
+        } else {
+          let aIdx = 1;
+          fullAbsentees.forEach(({ student }) => {
+            txt += `${aIdx++}. ${student.name} (${student.student_id}) - Full Day\n`;
           });
-          txt += `\n`;
-        }
-
-        if (partialAbsentees.length > 0) {
-          txt += `*Period Absentees (${partialAbsentees.length}):*\n`;
-          partialAbsentees.forEach(({ student, absentPeriods }, idx) => {
+          partialAbsentees.forEach(({ student, absentPeriods }) => {
             const periodsText = absentPeriods.map((ap) => `P${ap.period}`).join(', ');
-            txt += `${idx + 1}. ${student.name} (${student.student_id}) — Absent in ${periodsText}\n`;
+            txt += `${aIdx++}. ${student.name} (${student.student_id}) - ${periodsText}\n`;
           });
-          txt += `\n`;
         }
 
         if (odStudents.length > 0) {
-          txt += `*OD (${odStudents.length}):* ${odStudents.map((o) => `${o.student.name} (P${o.odPeriods.map((x) => x.period).join(',')})`).join(', ')}\n\n`;
+          txt += `\n*OD (${odStudents.length}):* ${odStudents.map((o) => `${o.student.name} (P${o.odPeriods.map((x) => x.period).join(',')})`).join(', ')}\n`;
         }
 
-        txt += `*Total Present Hours:* ${dailyOverview.presentCount} | *Total Absent Hours:* ${dailyOverview.absentCount} | *Day Att:* ${dailyOverview.attendancePercentage.toFixed(1)}%`;
+        txt += `\n*Present: ${fullPresentees.length}/${activeStudents.length}* | *${dailyOverview.attendancePercentage.toFixed(1)}%*`;
         return txt;
       }
+
 
       // ── FORMAT 3: COMPLETE AUDIT DOCUMENT ──
       let txt = `=====================================================\n`;
@@ -351,11 +353,13 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
       completedPeriods.forEach((p) => {
         const pd = periodAttendanceDetails[p];
         if (pd) {
-          txt += `Period ${p} [${pd.timing}] - ${pd.subject}\n`;
+          txt += `\nPeriod ${p} [${pd.timing}] - ${pd.subject}\n`;
           txt += `  Present: ${pd.presentCount} | OD: ${pd.odCount} | Absent: ${pd.absentCount} | Rate: ${pd.percentage}%\n`;
-          if (pd.absentList.length > 0) {
-            txt += `  Absentees: ${pd.absentList.map((s) => `${s.name} (${s.student_id})`).join(', ')}\n`;
+          txt += `  Presentees (${pd.presentCount}): ${pd.presentList.length > 0 ? pd.presentList.map((s) => `${s.name} (${s.student_id})`).join(', ') : 'None'}\n`;
+          if (pd.odCount > 0) {
+            txt += `  OD (${pd.odCount}): ${pd.odList.map((s) => `${s.name} (${s.student_id})`).join(', ')}\n`;
           }
+          txt += `  Absentees (${pd.absentCount}): ${pd.absentList.length > 0 ? pd.absentList.map((s) => `${s.name} (${s.student_id})`).join(', ') : 'Nil'}\n`;
         }
       });
 
@@ -371,28 +375,45 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
     if (format === 'standard') {
       let txt = `*SPIHER Attendance Report*\n`;
       txt += `Class: ${classId} (${classNameTitle})\n`;
-      txt += `Date: ${formattedDate} ${dayLabel ? `| ${dayLabel}` : ''}\n`;
-      txt += `Period: Period ${activePeriod} (${pData.subject}) [${pData.timing}]\n\n`;
+      txt += `Date: ${formattedDate}${dayLabel ? ` | ${dayLabel}` : ''}\n`;
+      txt += `Period: Period ${activePeriod} (${pData.subject})\n\n`;
 
-      txt += `*Absentees (${pData.absentCount}):*\n`;
-      if (pData.absentList.length === 0) {
-        txt += `Nil (100% Present)\n`;
+      // Presentees first
+      txt += `*Presentees (${pData.presentCount + pData.odCount}/${activeStudents.length}):*\n`;
+      if (pData.presentList.length === 0 && pData.odCount === 0) {
+        txt += `Nil (No students present)\n`;
       } else {
-        pData.absentList.forEach((s, idx) => {
-          txt += `${idx + 1}. ${s.name} (${s.student_id})\n`;
+        let idx = 1;
+        pData.presentList.forEach((s) => {
+          txt += `${idx++}. ${s.name} (${s.student_id})\n`;
+        });
+        pData.odList.forEach((s) => {
+          txt += `${idx++}. ${s.name} (${s.student_id})\n`;
         });
       }
       txt += `\n`;
 
+      // Absentees
+      txt += `*Absentees (${pData.absentCount}):*\n`;
+      if (pData.absentList.length === 0) {
+        txt += `Nil (All students present)\n`;
+      } else {
+        pData.absentList.forEach((s, i) => {
+          txt += `${i + 1}. ${s.name} (${s.student_id})\n`;
+        });
+      }
+      txt += `\n`;
+
+      // OD section (if any)
       if (pData.odCount > 0) {
         txt += `*On Duty (${pData.odCount}):*\n`;
-        pData.odList.forEach((s, idx) => {
-          txt += `${idx + 1}. ${s.name} (${s.student_id})\n`;
+        pData.odList.forEach((s, i) => {
+          txt += `${i + 1}. ${s.name} (${s.student_id})\n`;
         });
         txt += `\n`;
       }
 
-      txt += `*Summary:* Present: *${pData.presentCount + pData.odCount}/${activeStudents.length}* | Absent: *${pData.absentCount}* | Attendance: *${pData.percentage}%*`;
+      txt += `*Summary:* Total Present: *${pData.presentCount + pData.odCount}/${activeStudents.length}* | Total Absent: *${pData.absentCount}* | Attendance: *${pData.percentage}%*`;
       return txt;
     }
 
@@ -493,339 +514,295 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
   };
 
   return (
-    <div className="space-y-6">
-      {/* ── TOP ACTION & SHARING BANNER (Prominently at the top so NO scrolling is needed!) ── */}
-      <Card className="border-emerald-300 bg-gradient-to-r from-emerald-950 via-slate-900 to-indigo-950 text-white shadow-lg overflow-hidden rounded-3xl">
-        <CardContent className="p-5 sm:p-6 space-y-4">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center justify-center shadow-inner shrink-0">
-                <MessageCircle className="w-6 h-6 fill-current" />
+    <div className="space-y-4 pb-6">
+      {/* ── BANNER: WhatsApp Report Controls ── */}
+      <Card className="border-emerald-500/30 bg-gradient-to-br from-emerald-950 via-slate-900 to-indigo-950 text-white shadow-xl overflow-hidden rounded-3xl">
+        <CardContent className="p-4 sm:p-5 space-y-4">
+
+          {/* Title Row */}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center justify-center shrink-0 shadow-inner">
+                <MessageCircle className="w-5 h-5 fill-current" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-base sm:text-lg font-black tracking-tight">
-                    Instant WhatsApp & Daily Attendance Report
-                  </h3>
-                  <Badge variant="success" size="sm" className="font-bold">
-                    {classId}
-                  </Badge>
-                  {dayOrderNumber && (
-                    <Badge variant="purple" size="sm">
-                      Day Order {dayOrderNumber}
-                    </Badge>
-                  )}
+                  <h3 className="text-sm sm:text-base font-black tracking-tight">WhatsApp & Daily Report</h3>
+                  <Badge variant="success" size="sm" className="font-extrabold">{classId}</Badge>
+                  {dayOrderNumber && <Badge variant="purple" size="sm" className="font-bold">Day Order {dayOrderNumber}</Badge>}
                 </div>
-                <p className="text-xs text-slate-300 mt-0.5">
-                  {formatDate(date)} • 1-Click WhatsApp share with full day present, absent, OD, and period-wise absentees.
-                </p>
+                <p className="text-xs text-slate-300 mt-0.5">{formatDate(date)} • Full day absentees, OD & period-wise report</p>
               </div>
             </div>
 
-            {/* Quick Action Buttons (At Top!) */}
-            <div className="flex items-center gap-2 flex-wrap self-start lg:self-center">
-              {/* WhatsApp Share Button */}
+            {/* Top Action Buttons */}
+            <div className="flex items-center gap-2 shrink-0">
               <Button
                 variant="primary"
-                size="md"
+                size="sm"
                 onClick={handleWhatsAppShare}
-                className="gap-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-xs sm:text-sm px-5 py-2.5 rounded-2xl shadow-md shadow-emerald-500/20 cursor-pointer"
+                className="gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-xs px-3.5 py-2 rounded-xl shadow-md shadow-emerald-500/20 cursor-pointer"
               >
                 <MessageCircle className="w-4 h-4 fill-current" />
                 <span>Share to WhatsApp</span>
               </Button>
-
-              {/* Copy Text Button */}
               <Button
                 variant="outline"
-                size="md"
+                size="sm"
                 onClick={handleCopy}
                 className={cn(
-                  'gap-1.5 text-xs sm:text-sm font-bold px-4 py-2.5 rounded-2xl border transition-all cursor-pointer',
+                  'gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl border transition-all cursor-pointer',
                   copied
                     ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-black'
                     : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
                 )}
               >
-                {copied ? <Check className="w-4 h-4 stroke-[3]" /> : <Copy className="w-4 h-4" />}
-                <span>{copied ? 'Copied!' : 'Copy Text'}</span>
+                {copied ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copied ? 'Copied!' : 'Copy'}</span>
               </Button>
-
-              {/* Download .txt */}
               <Button
                 variant="outline"
-                size="md"
+                size="sm"
                 onClick={handleDownloadTxt}
-                className="gap-1.5 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border-white/10 text-xs px-3.5 py-2.5 rounded-2xl cursor-pointer"
-                title="Download report as .txt"
+                className="bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border-white/10 text-xs px-2.5 py-2 rounded-xl cursor-pointer"
+                title="Download .txt"
               >
-                <Download className="w-4 h-4" />
-                <span className="hidden sm:inline">.txt</span>
+                <Download className="w-3.5 h-3.5" />
               </Button>
             </div>
           </div>
 
-          {/* Controls: Scope Selector & Format Style */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-white/10">
+          {/* Controls Row: Scope + Format */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-white/10">
             {/* Scope Selector */}
             <div className="space-y-1.5">
-              <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                Report Scope:
+              <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Report Scope:</span>
               </label>
-              <div className="grid grid-cols-2 gap-1 p-1 bg-white/10 rounded-xl text-xs font-bold">
+              <div className="grid grid-cols-2 gap-1.5 p-1 bg-white/10 rounded-2xl text-xs font-bold">
                 <button
                   type="button"
                   onClick={() => setScope('fullday')}
                   className={cn(
-                    'py-2 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer',
-                    scope === 'fullday'
-                      ? 'bg-emerald-500 text-slate-950 shadow-xs font-black'
-                      : 'text-slate-300 hover:text-white'
+                    'py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer',
+                    scope === 'fullday' ? 'bg-emerald-500 text-slate-950 shadow-xs font-black' : 'text-slate-300 hover:text-white'
                   )}
                 >
-                  <Calendar className="w-3.5 h-3.5" />
+                  <Calendar className="w-3.5 h-3.5 shrink-0" />
                   <span>Full Day Summary</span>
                 </button>
-
                 <button
                   type="button"
                   onClick={() => setScope('period')}
                   className={cn(
-                    'py-2 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer',
-                    scope === 'period'
-                      ? 'bg-emerald-500 text-slate-950 shadow-xs font-black'
-                      : 'text-slate-300 hover:text-white'
+                    'py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer',
+                    scope === 'period' ? 'bg-emerald-500 text-slate-950 shadow-xs font-black' : 'text-slate-300 hover:text-white'
                   )}
                 >
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>Period (P{activePeriod})</span>
+                  <Clock className="w-3.5 h-3.5 shrink-0" />
+                  <span>Period {activePeriod}</span>
                 </button>
               </div>
             </div>
 
             {/* Format Style */}
             <div className="space-y-1.5">
-              <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                Format Style:
+              <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Format Style:</span>
               </label>
-              <div className="grid grid-cols-3 gap-1 p-1 bg-white/10 rounded-xl text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => setFormat('standard')}
-                  className={cn(
-                    'py-2 px-2 rounded-lg transition-all text-center text-[11px] cursor-pointer',
-                    format === 'standard'
-                      ? 'bg-white text-slate-950 shadow-xs font-black'
-                      : 'text-slate-300 hover:text-white'
-                  )}
-                >
-                  WhatsApp
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setFormat('compact')}
-                  className={cn(
-                    'py-2 px-2 rounded-lg transition-all text-center text-[11px] cursor-pointer',
-                    format === 'compact'
-                      ? 'bg-white text-slate-950 shadow-xs font-black'
-                      : 'text-slate-300 hover:text-white'
-                  )}
-                >
-                  Absentees Only
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setFormat('complete')}
-                  className={cn(
-                    'py-2 px-2 rounded-lg transition-all text-center text-[11px] cursor-pointer',
-                    format === 'complete'
-                      ? 'bg-white text-slate-950 shadow-xs font-black'
-                      : 'text-slate-300 hover:text-white'
-                  )}
-                >
-                  Official Doc
-                </button>
+              <div className="grid grid-cols-3 gap-1.5 p-1 bg-white/10 rounded-2xl text-[11px] font-bold">
+                {(['standard', 'compact', 'complete'] as const).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setFormat(f)}
+                    className={cn(
+                      'py-2 px-2 rounded-xl transition-all text-center cursor-pointer',
+                      format === f ? 'bg-white text-slate-950 shadow-xs font-black' : 'text-slate-300 hover:text-white'
+                    )}
+                  >
+                    {f === 'standard' ? 'WhatsApp' : f === 'compact' ? 'Short' : 'Official Doc'}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
 
-          {/* Period Selector (if in period scope) */}
+          {/* Period Selector (if period scope) */}
           {scope === 'period' && (
-            <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-white/10">
-              <span className="text-xs text-slate-400 font-bold mr-1">Select Period:</span>
-              {[1, 2, 3, 4, 5, 6, 7].map((p) => {
-                const pd = periodAttendanceDetails[p];
-                const isSelected = activePeriod === p;
-                return (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setActivePeriod(p as PeriodNumber)}
-                    className={cn(
-                      'px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer',
-                      isSelected
-                        ? 'bg-blue-500 text-white shadow-xs font-black'
-                        : 'bg-white/10 text-slate-300 hover:bg-white/20'
-                    )}
-                  >
-                    <span>P{p}</span>
-                    {pd && (
-                      <span className="text-[10px] text-slate-300 opacity-80">
-                        ({pd.subject})
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+            <div className="space-y-1.5 pt-3 border-t border-white/10">
+              <span className="text-[11px] text-slate-300 font-extrabold uppercase tracking-wider">Select Period:</span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {[1, 2, 3, 4, 5, 6, 7].map((p) => {
+                  const pd = periodAttendanceDetails[p];
+                  const isSelected = activePeriod === p;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setActivePeriod(p as PeriodNumber)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer',
+                        isSelected
+                          ? 'bg-blue-500 text-white shadow-xs font-black ring-2 ring-blue-300'
+                          : 'bg-white/10 text-slate-300 hover:bg-white/20'
+                      )}
+                    >
+                      <span>P{p}</span>
+                      {pd?.subject && <span className="text-[10px] opacity-80">({pd.subject})</span>}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* ── SECTION 1: DETAILED ABSENTEES & ATTENDANCE BREAKDOWN ── */}
+      {/* ── MAIN CONTENT: Message Preview + Absentees Side by Side ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Card 1: Absentees Breakdown (Full Day + Period Specific) */}
+
+        {/* Left: Formatted Message Preview */}
+        <Card className="border-slate-200 bg-white shadow-xs rounded-3xl flex flex-col overflow-hidden">
+          <CardHeader className="p-4 sm:p-5 pb-3 border-b border-slate-100 bg-slate-50/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-sm font-black text-slate-900">Message Preview</CardTitle>
+                  <CardDescription className="text-[11px]">
+                    {generatedMessageText.split('\n').length} lines • {generatedMessageText.length} chars
+                  </CardDescription>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopy}
+                  className={cn(
+                    'gap-1 text-xs font-bold py-1.5 px-3 rounded-xl border transition-all cursor-pointer',
+                    copied ? 'bg-emerald-50 text-emerald-700 border-emerald-300 font-black' : 'border-slate-300 bg-white hover:bg-slate-100'
+                  )}
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copied ? 'Copied!' : 'Copy'}</span>
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleWhatsAppShare}
+                  className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black py-1.5 px-3.5 rounded-xl shadow-xs cursor-pointer"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 fill-current" />
+                  <span>Send</span>
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-4 flex-1 flex flex-col">
+            <textarea
+              readOnly
+              value={generatedMessageText}
+              className="w-full flex-1 min-h-[320px] sm:min-h-[420px] p-4 bg-slate-950 text-emerald-400 font-mono text-xs rounded-2xl border border-slate-800 focus:outline-none resize-none shadow-inner leading-relaxed select-all"
+            />
+            <div className="flex items-center justify-between mt-2.5">
+              <span className="text-[10px] text-slate-400 font-mono">Tap inside to select all</span>
+              <p className="text-[10px] text-emerald-700 font-bold">✓ Ready for CR WhatsApp Group</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Right: Absentees Breakdown */}
         <Card className="border-slate-200 bg-white shadow-xs rounded-2xl">
           <CardHeader className="pb-3 border-b border-slate-100">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <XCircle className="w-5 h-5 text-rose-600" />
-                <CardTitle className="text-sm font-black text-slate-900">
-                  Absentees & Period-Wise Absence Breakdown
-                </CardTitle>
+                <XCircle className="w-4 h-4 text-rose-600" />
+                <CardTitle className="text-sm font-black text-slate-900">Absentees Breakdown</CardTitle>
               </div>
               <Badge variant="danger" size="sm">
-                {fullDayDetailedAnalysis.fullAbsentees.length +
-                  fullDayDetailedAnalysis.partialAbsentees.length}{' '}
-                Total Absentees
+                {fullDayDetailedAnalysis.fullAbsentees.length + fullDayDetailedAnalysis.partialAbsentees.length} Total
               </Badge>
             </div>
-            <CardDescription className="text-xs">
-              Categorized into Full-Day absentees and partial period absentees with exact period numbers.
-            </CardDescription>
+            <CardDescription className="text-xs">Full-day and period-wise absentees with exact periods.</CardDescription>
           </CardHeader>
-          <CardContent className="p-4 sm:p-5 space-y-4">
-            {/* 1. Full Day Absentees */}
+          <CardContent className="p-4 space-y-4">
+            {/* Full Day Absentees */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-rose-600" />
-                  <span>Full-Day Absentees ({fullDayDetailedAnalysis.fullAbsentees.length})</span>
-                </span>
-                <span className="text-[11px] text-slate-400 font-mono">
-                  Absent for all marked periods
-                </span>
-              </div>
-
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-rose-600 shrink-0" />
+                Full-Day Absentees ({fullDayDetailedAnalysis.fullAbsentees.length})
+              </span>
               {fullDayDetailedAnalysis.fullAbsentees.length === 0 ? (
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 italic text-center">
-                  No full-day absentees today.
-                </div>
+                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 italic text-center">No full-day absentees today.</div>
               ) : (
                 <div className="divide-y divide-rose-100 bg-rose-50/50 border border-rose-200 rounded-xl overflow-hidden">
                   {fullDayDetailedAnalysis.fullAbsentees.map(({ student }) => (
-                    <div
-                      key={student.student_id}
-                      className="p-2.5 px-3 flex items-center justify-between gap-2 text-xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-[11px] font-bold text-rose-900 bg-rose-100 px-1.5 py-0.5 rounded">
-                          {student.student_id}
-                        </span>
-                        <span className="font-bold text-slate-900">{student.name}</span>
+                    <div key={student.student_id} className="p-2.5 px-3 flex items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-mono text-[11px] font-bold text-rose-900 bg-rose-100 px-1.5 py-0.5 rounded shrink-0">{student.student_id}</span>
+                        <span className="font-bold text-slate-900 truncate">{student.name}</span>
                       </div>
-                      <span className="text-[10px] font-bold text-rose-700 bg-rose-200 px-2 py-0.5 rounded-full">
-                        Full Day Absent
-                      </span>
+                      <span className="text-[10px] font-bold text-rose-700 bg-rose-200 px-2 py-0.5 rounded-full shrink-0">Full Day</span>
                     </div>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* 2. Partial / Period-Wise Absentees */}
+            {/* Period-Wise Absentees */}
             <div className="space-y-2 pt-2 border-t border-slate-100">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-500" />
-                  <span>Period-Wise Absentees ({fullDayDetailedAnalysis.partialAbsentees.length})</span>
-                </span>
-                <span className="text-[11px] text-slate-400 font-mono">
-                  Absent in specific periods
-                </span>
-              </div>
-
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                Period-Wise Absentees ({fullDayDetailedAnalysis.partialAbsentees.length})
+              </span>
               {fullDayDetailedAnalysis.partialAbsentees.length === 0 ? (
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 italic text-center">
-                  No partial period absentees today.
-                </div>
+                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 italic text-center">No partial absentees today.</div>
               ) : (
                 <div className="space-y-2">
-                  {fullDayDetailedAnalysis.partialAbsentees.map(
-                    ({ student, absentPeriods, presentHours, totalWorking }) => (
-                      <div
-                        key={student.student_id}
-                        className="p-3 bg-amber-50/40 border border-amber-200 rounded-xl space-y-1.5 text-xs"
-                      >
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-[11px] font-bold text-slate-900 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                              {student.student_id}
-                            </span>
-                            <span className="font-bold text-slate-900">{student.name}</span>
-                          </div>
-                          <Badge variant="warning" size="sm">
-                            Attended: {presentHours}/{totalWorking} hrs
-                          </Badge>
+                  {fullDayDetailedAnalysis.partialAbsentees.map(({ student, absentPeriods, presentHours, totalWorking }) => (
+                    <div key={student.student_id} className="p-3 bg-amber-50/40 border border-amber-200 rounded-xl space-y-1.5 text-xs">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-mono text-[11px] font-bold text-slate-900 bg-white px-1.5 py-0.5 rounded border border-slate-200 shrink-0">{student.student_id}</span>
+                          <span className="font-bold text-slate-900 truncate">{student.name}</span>
                         </div>
-
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[11px] font-bold text-rose-800">
-                            Absent in Periods:
-                          </span>
-                          {absentPeriods.map((ap) => (
-                            <span
-                              key={ap.period}
-                              className="px-2 py-0.5 bg-rose-100 text-rose-900 font-bold rounded text-[11px] border border-rose-200"
-                            >
-                              P{ap.period} ({ap.subject})
-                            </span>
-                          ))}
-                        </div>
+                        <Badge variant="warning" size="sm">{presentHours}/{totalWorking} hrs</Badge>
                       </div>
-                    )
-                  )}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11px] font-bold text-rose-800 shrink-0">Absent:</span>
+                        {absentPeriods.map((ap) => (
+                          <span key={ap.period} className="px-2 py-0.5 bg-rose-100 text-rose-900 font-bold rounded text-[11px] border border-rose-200">
+                            P{ap.period} ({ap.subject})
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
 
-            {/* 3. On-Duty (OD) Students */}
+            {/* OD Students */}
             {fullDayDetailedAnalysis.odStudents.length > 0 && (
               <div className="space-y-2 pt-2 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-amber-600" />
-                    <span>On Duty (OD) Students ({fullDayDetailedAnalysis.odStudents.length})</span>
-                  </span>
-                </div>
-
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-amber-600" />
+                  On Duty ({fullDayDetailedAnalysis.odStudents.length})
+                </span>
                 <div className="space-y-1.5">
                   {fullDayDetailedAnalysis.odStudents.map(({ student, odPeriods }) => (
-                    <div
-                      key={student.student_id}
-                      className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-2 text-xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-[11px] text-amber-900">
-                          {student.student_id}
-                        </span>
-                        <span className="font-bold text-slate-900">{student.name}</span>
+                    <div key={student.student_id} className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-mono font-bold text-[11px] text-amber-900 shrink-0">{student.student_id}</span>
+                        <span className="font-bold text-slate-900 truncate">{student.name}</span>
                       </div>
-                      <span className="text-[11px] text-amber-900 font-bold">
-                        {odPeriods.map((op) => `P${op.period} (${op.subject})`).join(', ')}
-                      </span>
+                      <span className="text-[11px] text-amber-900 font-bold shrink-0">{odPeriods.map((op) => `P${op.period}`).join(', ')}</span>
                     </div>
                   ))}
                 </div>
@@ -833,123 +810,44 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
             )}
           </CardContent>
         </Card>
-
-        {/* Card 2: Formatted Message Live Preview & 1-Click Copy */}
-        <Card className="border-slate-200 bg-white shadow-xs rounded-2xl flex flex-col">
-          <CardHeader className="pb-3 border-b border-slate-100">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-blue-600" />
-                <CardTitle className="text-sm font-black text-slate-900">
-                  Formatted WhatsApp Message Output
-                </CardTitle>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopy}
-                  className="gap-1 text-xs font-bold border-slate-300 py-1"
-                >
-                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copied ? 'Copied' : 'Copy'}</span>
-                </Button>
-
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={handleWhatsAppShare}
-                  className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-1"
-                >
-                  <MessageCircle className="w-3.5 h-3.5 fill-current" />
-                  <span>Send</span>
-                </Button>
-              </div>
-            </div>
-            <CardDescription className="text-xs">
-              Live preview formatted with emojis, bold headers, and exact period absentees ready to paste.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-4 flex-1 flex flex-col">
-            <div className="relative flex-1">
-              <textarea
-                readOnly
-                value={generatedMessageText}
-                rows={16}
-                className="w-full h-full p-4 bg-slate-950 text-emerald-400 font-mono text-xs rounded-2xl border border-slate-800 focus:outline-none select-all resize-none shadow-inner leading-relaxed"
-              />
-            </div>
-
-            <div className="pt-3 flex items-center justify-between text-[11px] text-slate-400 font-mono">
-              <span>{generatedMessageText.split('\n').length} lines • {generatedMessageText.length} characters</span>
-              <span className="text-emerald-700 font-bold">✓ Ready for CR WhatsApp Group</span>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
-      {/* ── SECTION 2: PERIOD-BY-PERIOD SUMMARY MATRIX (P1 TO P7) ── */}
+      {/* ── SECTION 2: PERIOD-BY-PERIOD MATRIX ── */}
       <Card className="border-slate-200 bg-white shadow-xs rounded-2xl">
         <CardHeader className="pb-3 border-b border-slate-100">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Layers className="w-5 h-5 text-indigo-600" />
-              <CardTitle className="text-sm font-black text-slate-900">
-                Period-by-Period Daily Schedule & Attendance Roster
-              </CardTitle>
+              <Layers className="w-4 h-4 text-indigo-600" />
+              <CardTitle className="text-sm font-black text-slate-900">Period-by-Period Roster</CardTitle>
             </div>
-            <Badge variant="purple" size="sm">
-              {dailyOverview.periodsCompleted} / 7 Periods Completed
-            </Badge>
+            <Badge variant="purple" size="sm">{dailyOverview.periodsCompleted}/7 Periods</Badge>
           </div>
-          <CardDescription className="text-xs">
-            Review individual period attendance metrics, subjects, timings, and absentees for each period.
-          </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 sm:p-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        <CardContent className="p-3 sm:p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {[1, 2, 3, 4, 5, 6, 7].map((p) => {
               const pd = periodAttendanceDetails[p];
               const isRecorded = dailyOverview.completedPeriodNumbers.includes(p as PeriodNumber);
-
               return (
                 <div
                   key={p}
                   className={cn(
-                    'p-3.5 rounded-2xl border transition-all text-xs flex flex-col justify-between gap-3',
-                    isRecorded
-                      ? 'bg-slate-50 border-slate-200 shadow-2xs'
-                      : 'bg-slate-50/40 border-dashed border-slate-200 opacity-70'
+                    'p-3.5 rounded-2xl border text-xs flex flex-col gap-2.5',
+                    isRecorded ? 'bg-slate-50 border-slate-200' : 'bg-slate-50/40 border-dashed border-slate-200 opacity-60'
                   )}
                 >
-                  {/* Top Bar */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-6 h-6 rounded-lg bg-blue-600 text-white font-black text-xs flex items-center justify-center">
-                          P{p}
-                        </span>
-                        <span className="font-black text-sm text-slate-900 truncate">
-                          {pd?.subject || 'Subject'}
-                        </span>
-                      </div>
-
-                      {isRecorded ? (
-                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded-md text-[10px]">
-                          {pd?.percentage}%
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-slate-400 italic">Not Marked</span>
-                      )}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-6 h-6 rounded-lg bg-blue-600 text-white font-black text-xs flex items-center justify-center">P{p}</span>
+                      <span className="font-black text-slate-900 truncate">{pd?.subject || 'Subject'}</span>
                     </div>
-
-                    <div className="text-[11px] text-slate-500 font-mono">
-                      {pd?.timing}
-                    </div>
+                    {isRecorded
+                      ? <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded-md text-[10px]">{pd?.percentage}%</span>
+                      : <span className="text-[10px] text-slate-400 italic">Not Marked</span>
+                    }
                   </div>
+                  <div className="text-[11px] text-slate-500 font-mono">{pd?.timing}</div>
 
-                  {/* Stats Counts */}
                   {isRecorded && pd && (
                     <div className="space-y-2 pt-2 border-t border-slate-200">
                       <div className="grid grid-cols-3 gap-1 text-center font-mono">
@@ -966,19 +864,13 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
                           <span className="font-black text-xs">{pd.odCount}</span>
                         </div>
                       </div>
-
-                      {/* Absentees List for this period */}
                       <div>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
-                          Absentees ({pd.absentCount}):
-                        </span>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Absentees:</span>
                         {pd.absentList.length === 0 ? (
-                          <p className="text-[11px] text-emerald-700 font-semibold mt-0.5">
-                            ✓ 100% Attended
-                          </p>
+                          <p className="text-[11px] text-emerald-700 font-semibold mt-0.5">✓ All Present</p>
                         ) : (
                           <div className="text-[11px] text-rose-800 font-mono mt-0.5 line-clamp-2">
-                            {pd.absentList.map((s) => s.student_id.slice(-3) + ' ' + s.name.split(' ')[0]).join(', ')}
+                            {pd.absentList.map((s) => s.name.split(' ')[0]).join(', ')}
                           </div>
                         )}
                       </div>
@@ -991,7 +883,7 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
         </CardContent>
       </Card>
 
-      {/* ── SECTION 3: 100% PRESENTEES ROSTER (Collapsible) ── */}
+      {/* ── SECTION 3: FULL PRESENTEES LIST (Collapsible) ── */}
       <Card className="border-slate-200 bg-white shadow-xs rounded-2xl overflow-hidden">
         <button
           type="button"
@@ -999,28 +891,19 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
           className="w-full p-4 sm:p-5 flex items-center justify-between text-left hover:bg-slate-50 transition-colors cursor-pointer"
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+            <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
               <CheckCircle2 className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h4 className="font-black text-sm text-slate-900">
-                  Full Day Presentees ({fullDayDetailedAnalysis.fullPresentees.length} Students)
-                </h4>
-                <Badge variant="success" size="sm">
-                  100% Today
-                </Badge>
+                <h4 className="font-black text-sm text-slate-900">Full Day Presentees ({fullDayDetailedAnalysis.fullPresentees.length})</h4>
+                <Badge variant="success" size="sm">100% Today</Badge>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Students who attended all scheduled periods for {formatDate(date)}.
-              </p>
+              <p className="text-xs text-slate-500 mt-0.5">Students who attended all scheduled periods.</p>
             </div>
           </div>
-
           <div className="flex items-center gap-2 text-slate-400">
-            <span className="text-xs font-bold text-slate-600 hidden sm:inline">
-              {showPresenteesList ? 'Hide List' : 'View All'}
-            </span>
+            <span className="text-xs font-bold text-slate-600 hidden sm:inline">{showPresenteesList ? 'Hide' : 'View All'}</span>
             {showPresenteesList ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
           </div>
         </button>
@@ -1029,15 +912,10 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
           <div className="p-4 sm:p-5 bg-slate-50/60 border-t border-slate-100">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {fullDayDetailedAnalysis.fullPresentees.map((student, idx) => (
-                <div
-                  key={student.student_id}
-                  className="p-2 px-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-2 text-xs"
-                >
+                <div key={student.student_id} className="p-2 px-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-2 text-xs">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-[10px] text-slate-400 font-mono">{idx + 1}.</span>
-                    <span className="font-mono font-bold text-[11px] text-slate-900 bg-slate-100 px-1 py-0.5 rounded">
-                      {student.student_id}
-                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono shrink-0">{idx + 1}.</span>
+                    <span className="font-mono font-bold text-[11px] text-slate-900 bg-slate-100 px-1 py-0.5 rounded shrink-0">{student.student_id}</span>
                     <span className="font-bold text-slate-900 truncate">{student.name}</span>
                   </div>
                   <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />

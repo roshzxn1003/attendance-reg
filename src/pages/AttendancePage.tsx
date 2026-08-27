@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { NavLink } from 'react-router-dom';
+import React, { useState, useMemo, useEffect } from 'react';
+import { NavLink, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Card, CardContent } from '../components/common/Card';
 import { useApp } from '../context/AppContext';
@@ -25,7 +25,6 @@ import { DayCycleSetupCard } from '../components/daycycle/DayCycleSetupCard';
 import { AttendanceMarkingGrid } from '../components/attendance/AttendanceMarkingGrid';
 import { DailyAttendanceOverviewCard } from '../components/attendance/DailyAttendanceOverviewCard';
 import { StudentAttendanceSummaryTable } from '../components/attendance/StudentAttendanceSummaryTable';
-import { AttendanceSummaryShareModal } from '../components/attendance/AttendanceSummaryShareModal';
 import { DailyAttendanceReportTab } from '../components/attendance/DailyAttendanceReportTab';
 import { useDayCycle } from '../hooks/useDayCycle';
 import { useTimetable } from '../hooks/useTimetable';
@@ -35,12 +34,31 @@ import { cn } from '../lib/utils';
 
 type ActiveViewMode = 'marking' | 'report' | 'summary';
 
-export const AttendancePage: React.FC = () => {
+interface AttendancePageProps {
+  initialView?: ActiveViewMode;
+}
+
+export const AttendancePage: React.FC<AttendancePageProps> = ({ initialView }) => {
   const { selectedClass } = useApp();
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab') as ActiveViewMode | null;
+
   const [selectedDate, setSelectedDate] = useState<string>(getTodayDateString());
   const [selectedPeriods, setSelectedPeriods] = useState<PeriodNumber[]>([1]);
-  const [activeView, setActiveView] = useState<ActiveViewMode>('marking');
-  const [isDailyShareModalOpen, setIsDailyShareModalOpen] = useState(false);
+  const [activeView, setActiveView] = useState<ActiveViewMode>(() => {
+    if (tabParam && ['marking', 'report', 'summary'].includes(tabParam)) return tabParam;
+    return initialView || 'marking';
+  });
+  const [reportScope, setReportScope] = useState<'period' | 'fullday'>('period');
+
+  useEffect(() => {
+    if (tabParam && ['marking', 'report', 'summary'].includes(tabParam)) {
+      setActiveView(tabParam);
+      if (tabParam === 'report') {
+        setReportScope('period');
+      }
+    }
+  }, [tabParam]);
 
   // Day Cycle Hook for active date & class
   const {
@@ -136,8 +154,9 @@ export const AttendancePage: React.FC = () => {
       {/* ── Top Bar: Date Picker & Quick Actions ── */}
       <Card className="bg-white border-slate-200 shadow-xs">
         <CardContent className="p-3.5 sm:p-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {/* Left: Date + Day Order */}
+            <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-300 shadow-2xs">
                 <Calendar className="w-4 h-4 text-blue-600" />
                 <input
@@ -147,49 +166,47 @@ export const AttendancePage: React.FC = () => {
                   className="text-xs sm:text-sm font-bold text-slate-900 bg-transparent focus:outline-none cursor-pointer font-mono"
                 />
               </div>
-
-              <div className="text-xs text-slate-600 font-semibold">
+              <div className="text-xs text-slate-600 font-semibold hidden sm:block">
                 {formatDate(selectedDate)}
               </div>
-
               {activeDayOrderLabel && !isHoliday && (
-                <Badge variant="info" size="sm">
-                  {activeDayOrderLabel}
-                </Badge>
+                <Badge variant="info" size="sm">{activeDayOrderLabel}</Badge>
               )}
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
-              {/* WhatsApp Quick Switch Button */}
+            {/* Right: Action Buttons */}
+            <div className="flex items-center gap-2 flex-wrap">
               {isAssigned && !isHoliday && (
                 <Button
                   variant="primary"
                   size="sm"
-                  onClick={() => setActiveView('report')}
+                  onClick={() => {
+                    setReportScope('period');
+                    setActiveView('report');
+                  }}
                   className={cn(
                     'gap-1.5 font-bold text-xs py-1.5 px-3 rounded-xl transition-all cursor-pointer',
                     activeView === 'report'
                       ? 'bg-emerald-700 text-white shadow-xs'
                       : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
                   )}
-                  title="Open WhatsApp report & daily absentees summary"
                 >
                   <MessageCircle className="w-3.5 h-3.5 fill-current" />
                   <span>WhatsApp Report</span>
                 </Button>
               )}
-
-              {/* Backlog Wizard Button */}
               <NavLink
                 to="/backlog-entry"
                 className="gap-1.5 font-bold text-xs py-1.5 px-3 rounded-xl transition-all bg-amber-500 hover:bg-amber-600 text-white shadow-xs flex items-center cursor-pointer"
-                title="Rapidly enter 2 months of handwritten registers with the Backlog Wizard"
               >
                 <Zap className="w-3.5 h-3.5 fill-current" />
                 <span>Backlog Wizard</span>
               </NavLink>
+            </div>
 
-              <Badge variant="purple" size="md">
+            {/* Class Selector — bottom on mobile, inline on sm+ */}
+            <div className="w-full sm:w-auto order-last sm:order-none flex sm:justify-end">
+              <Badge variant="purple" size="md" className="w-full sm:w-auto justify-center text-center">
                 {selectedClass.id} ({selectedClass.name})
               </Badge>
             </div>
@@ -218,7 +235,10 @@ export const AttendancePage: React.FC = () => {
           {/* Tab 2: WhatsApp & Day Report (Dedicated Tab!) */}
           <button
             type="button"
-            onClick={() => setActiveView('report')}
+            onClick={() => {
+              setReportScope('period');
+              setActiveView('report');
+            }}
             className={cn(
               'flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer',
               activeView === 'report'
@@ -459,6 +479,10 @@ export const AttendancePage: React.FC = () => {
                 timeRange={compositeTiming}
                 students={activeStudents}
                 onSaveSuccess={reloadDashboard}
+                onViewFullReport={() => {
+                  setReportScope('period');
+                  setActiveView('report');
+                }}
               />
             </div>
           )}
@@ -477,6 +501,7 @@ export const AttendancePage: React.FC = () => {
               todaySummaries={todaySummaries}
               dailyOverview={dailyOverview}
               selectedPeriod={selectedPeriods[0] || 1}
+              initialScope={reportScope}
             />
           )}
 
@@ -495,7 +520,10 @@ export const AttendancePage: React.FC = () => {
                 holidayReason={currentEntry?.holiday_reason}
                 onSelectPeriod={(p) => togglePeriod(p)}
                 selectedPeriods={selectedPeriods}
-                onShareClick={() => setActiveView('report')}
+                onShareClick={() => {
+                  setReportScope('fullday');
+                  setActiveView('report');
+                }}
               />
 
               <StudentAttendanceSummaryTable
@@ -509,22 +537,6 @@ export const AttendancePage: React.FC = () => {
           )}
         </div>
       )}
-
-      {/* ── Daily Summary Share Modal (for secondary modal flow) ── */}
-      <AttendanceSummaryShareModal
-        isOpen={isDailyShareModalOpen}
-        onClose={() => setIsDailyShareModalOpen(false)}
-        classId={selectedClass.id}
-        classNameTitle={selectedClass.name}
-        date={selectedDate}
-        dayOrderNumber={activeDayNumber}
-        selectedPeriods={selectedPeriods}
-        subject={compositeSubject}
-        students={activeStudents}
-        todaySummaries={todaySummaries}
-        dailyOverview={dailyOverview}
-        dateRecords={dateRecords}
-      />
     </div>
   );
 };

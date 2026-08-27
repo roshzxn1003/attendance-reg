@@ -40,6 +40,26 @@ export const router = createBrowserRouter([
     ),
   },
   {
+    path: '/attendance-report',
+    element: (
+      <ProtectedRoute allowedRoles={['cr', 'admin']}>
+        <AppLayout>
+          <AttendancePage initialView="report" />
+        </AppLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/report',
+    element: (
+      <ProtectedRoute allowedRoles={['cr', 'admin']}>
+        <AppLayout>
+          <AttendancePage initialView="report" />
+        </AppLayout>
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: '/backlog-entry',
     element: (
       <ProtectedRoute allowedRoles={['cr', 'admin']}>

@@ -24,7 +24,6 @@ import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { Card, CardContent } from '../common/Card';
 import { cn, formatDate } from '../../lib/utils';
-import { AttendanceSummaryShareModal } from './AttendanceSummaryShareModal';
 import { OneByOneAttendanceCard } from './OneByOneAttendanceCard';
 
 interface AttendanceMarkingGridProps {
@@ -37,6 +36,7 @@ interface AttendanceMarkingGridProps {
   timeRange: string;
   students: Student[];
   onSaveSuccess?: () => void;
+  onViewFullReport?: () => void;
 }
 
 export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
@@ -49,11 +49,11 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
   timeRange,
   students,
   onSaveSuccess,
+  onViewFullReport,
 }) => {
   const [search, setSearch] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'unmarked' | 'absent' | 'od'>('all');
   const [viewMode, setViewMode] = useState<'list' | 'one-by-one'>('list');
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const toast = useToast();
 
   const {
@@ -243,15 +243,17 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsShareModalOpen(true)}
-              className="gap-1.5 bg-white text-emerald-900 hover:bg-emerald-100 border-emerald-400 font-black text-xs rounded-xl shadow-2xs cursor-pointer"
-            >
-              <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Share Report 💬</span>
-            </Button>
+            {onViewFullReport && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={onViewFullReport}
+                className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-xs cursor-pointer"
+              >
+                <MessageCircle className="w-3.5 h-3.5 fill-current" />
+                <span>Open WhatsApp Report Tab →</span>
+              </Button>
+            )}
 
             <Badge variant="success" size="sm">
               {saveSuccess.stats.percentage}% Attendance
@@ -353,17 +355,19 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
                 <span>Clear</span>
               </Button>
 
-              {/* WhatsApp Report / Quick Share */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsShareModalOpen(true)}
-                className="gap-1.5 text-emerald-800 bg-emerald-50/70 hover:bg-emerald-100 border-emerald-300 flex-1 sm:flex-none py-2 text-xs rounded-xl font-bold transition-colors cursor-pointer"
-                title="Generate and copy or share formatted attendance report"
-              >
-                <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-                <span>WhatsApp Report</span>
-              </Button>
+              {/* WhatsApp Report Tab Button */}
+              {onViewFullReport && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onViewFullReport}
+                  className="gap-1.5 text-emerald-800 bg-emerald-50/70 hover:bg-emerald-100 border-emerald-300 flex-1 sm:flex-none py-2 text-xs rounded-xl font-bold transition-colors cursor-pointer"
+                  title="View formatted WhatsApp and Daily Attendance Report Tab"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>WhatsApp Report</span>
+                </Button>
+              )}
             </div>
 
             {/* Search & Filter */}
@@ -496,7 +500,7 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
           </Card>
 
           {/* Sticky Save Action Bar */}
-          <div className="sticky bottom-3 z-20 bg-white/95 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border-2 border-slate-300 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-2">
+          <div className="sticky bottom-[60px] md:bottom-3 z-20 bg-white/95 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border-2 border-slate-300 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-xs w-full sm:w-auto">
               {!isAllMarked ? (
                 <div className="flex items-center gap-2 text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 font-bold w-full sm:w-auto text-xs">
@@ -540,20 +544,6 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
           </div>
         </>
       )}
-
-      {/* ── Smart Automations & Quick Share Modal ── */}
-      <AttendanceSummaryShareModal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-        classId={classId}
-        classNameTitle={classNameTitle}
-        date={date}
-        dayOrderNumber={dayOrderNumber}
-        selectedPeriods={selectedPeriods}
-        subject={subject}
-        students={students}
-        marks={marks}
-      />
     </div>
   );
 };

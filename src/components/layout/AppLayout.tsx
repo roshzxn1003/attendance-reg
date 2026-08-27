@@ -18,7 +18,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       <PWAInstallBanner />
       <Navbar />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-8 flex flex-col">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-20 md:pb-8 flex flex-col">
         <PageTransition>
           {children || <Outlet />}
         </PageTransition>
