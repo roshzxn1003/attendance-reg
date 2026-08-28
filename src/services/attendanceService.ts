@@ -335,6 +335,56 @@ export async function saveMultiplePeriodsAttendance(
 }
 
 /**
+ * Save an arbitrary batch of AttendanceItem records atomically in one single database call.
+ */
+export async function saveRawAttendanceBatch(
+  records: AttendanceItem[]
+): Promise<{ savedCount: number; markedAt: string }> {
+  if (records.length === 0) {
+    return { savedCount: 0, markedAt: new Date().toISOString() };
+  }
+
+  const now = new Date().toISOString();
+  const payload = records.map((r) => ({
+    ...r,
+    marked_at: r.marked_at || now,
+  }));
+
+  let supabaseSuccess = false;
+
+  if (isSupabaseConfigured() && typeof navigator !== 'undefined' && navigator.onLine) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = supabase as any;
+      const { error } = await sb
+        .from('attendance')
+        .upsert(payload, { onConflict: 'student_id,date,period_number' });
+
+      if (!error) {
+        supabaseSuccess = true;
+      }
+    } catch {
+      // Network failure -> fallback to local storage and sync queue below
+    }
+  }
+
+  // Update local storage
+  const local = getLocalAttendance();
+  const keysToReplace = new Set(payload.map((r) => `${r.student_id}_${r.date}_${r.period_number}`));
+  const filtered = local.filter(
+    (r) => !keysToReplace.has(`${r.student_id}_${r.date}_${r.period_number}`)
+  );
+
+  saveLocalAttendance([...filtered, ...payload]);
+
+  if (!supabaseSuccess) {
+    queueForSync(payload);
+  }
+
+  return { savedCount: payload.length, markedAt: now };
+}
+
+/**
  * Delete attendance for a period
  */
 export async function deletePeriodAttendance(

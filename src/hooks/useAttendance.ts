@@ -36,8 +36,8 @@ export function useAttendance(
     stats: PeriodAttendanceStats;
   } | null>(null);
 
-  // Active students only
-  const activeStudents = useMemo(() => students.filter((s) => s.active), [students]);
+  // Active students only (normalize active status)
+  const activeStudents = useMemo(() => students.filter((s) => s.active !== false), [students]);
   const activeStudentIds = useMemo(() => activeStudents.map((s) => s.student_id), [activeStudents]);
 
   const load = useCallback(async () => {

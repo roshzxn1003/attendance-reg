@@ -10,7 +10,8 @@ import { SUBJECTS } from '../data/subjects';
 import { getSubjectForSlot, PERIOD_TIMINGS } from '../data/timetable';
 import { fetchStudents, Student } from './studentService';
 import { getAllDayCycleLogs, DayCycleEntry } from './dayCycleService';
-import { AttendanceItem, fetchAllClassAttendance } from './attendanceService';
+import { AttendanceItem } from './attendanceService';
+import { fetchDateRangeClassAttendance } from './monthlyAttendanceService';
 import { CLASSES } from '../data/classes';
 
 export interface SubjectOption {
@@ -101,8 +102,12 @@ export async function generateFacultySubjectReport(
     hoursPerWeek: '4',
   };
 
-  // 1. Fetch active students
-  const allStudents = await fetchStudents(classId);
+  // 1. Fetch active students and day cycle logs concurrently
+  const [allStudents, dayLogs] = await Promise.all([
+    fetchStudents(classId),
+    getAllDayCycleLogs(classId),
+  ]);
+
   const activeStudents = allStudents.filter((s) => s.active !== false);
   const studentMap = new Map<string, Student>();
   for (const s of activeStudents) {
@@ -110,17 +115,12 @@ export async function generateFacultySubjectReport(
   }
   const studentIds = Array.from(studentMap.keys());
 
-  // 2. Fetch all day cycle logs
-  const dayLogs = await getAllDayCycleLogs(classId);
   const dayLogMap = new Map<string, DayCycleEntry>();
   for (const log of dayLogs) {
     dayLogMap.set(log.date, log);
   }
 
-  // 3. Fetch all attendance records
-  const allRecords = await fetchAllClassAttendance(classId, studentIds);
-
-  // 4. Determine Date Filter Boundaries
+  // 2. Determine Date Filter Boundaries
   let filterStart = filters.startDate || '2026-07-01';
   let filterEnd = filters.endDate || '2026-12-31';
   let dateLabel = `${filterStart} to ${filterEnd}`;
@@ -132,6 +132,14 @@ export async function generateFacultySubjectReport(
     filterEnd = `${filters.month}-${String(daysInM).padStart(2, '0')}`;
     dateLabel = filters.month;
   }
+
+  // 3. Fetch only required date-range attendance records
+  const allRecords = await fetchDateRangeClassAttendance(
+    classId,
+    filterStart,
+    filterEnd,
+    studentIds
+  );
 
   // 5. Identify all sessions where this subject was scheduled & taught
   // Group records by session key: `${date}_P${period_number}`

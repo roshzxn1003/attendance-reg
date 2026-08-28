@@ -2,9 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { ClassId, DayNumber } from '../types';
 import {
   DayCycleEntry,
-  getDayCycleForDate,
   getAllDayCycleLogs,
-  getSuggestedNextDayOrder,
+  getSuggestedNextDayOrderFromLogs,
   setWorkingDayOrder,
   markHolidayForDate,
   removeDayCycleEntry,
@@ -23,19 +22,19 @@ export function useDayCycle(classId: ClassId, selectedDate: string) {
     setLoading(true);
     setError(null);
     try {
-      // 1. Fetch current date record
-      const entry = await getDayCycleForDate(classId, selectedDate);
+      // 1. Fetch all logs once (fast single query with local cache fallback)
+      const logs = await getAllDayCycleLogs(classId);
+      setAllLogs(logs);
+
+      // 2. Resolve current date entry in-memory
+      const entry = logs.find((l) => l.date === selectedDate) || null;
       setCurrentEntry(entry);
 
-      // 2. Fetch suggestion if not yet assigned
-      const suggestion = await getSuggestedNextDayOrder(classId, selectedDate);
+      // 3. Resolve suggestions in-memory (0ms)
+      const suggestion = getSuggestedNextDayOrderFromLogs(logs, selectedDate);
       setSuggestedDay(suggestion.suggestedDay);
       setPrevWorkingDate(suggestion.previousWorkingDate);
       setPrevWorkingDay(suggestion.previousDayNumber);
-
-      // 3. Fetch all logs
-      const logs = await getAllDayCycleLogs(classId);
-      setAllLogs(logs);
     } catch (err) {
       setError(String(err));
     } finally {

@@ -61,6 +61,9 @@ export async function fetchStudents(classId?: ClassId): Promise<Student[]> {
 
       const { data, error } = await query;
       if (!error && data && data.length > 0) {
+        if (!classId) {
+          saveLocalStudents(data as Student[]);
+        }
         return data as Student[];
       }
     } catch {

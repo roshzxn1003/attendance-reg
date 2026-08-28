@@ -153,23 +153,16 @@ export async function getAllDayCycleLogs(classId: ClassId): Promise<DayCycleEntr
 }
 
 /**
- * Calculate the suggested next Day Order (1–6) for a given target date.
- * Looks for the most recent working date strictly before the target date.
- * If previous was Day N -> suggests (N % 6) + 1.
- * If no prior working date exists -> suggests Day 1.
- * Holidays are skipped and do NOT consume a cycle slot!
+ * Pure in-memory calculation of suggested next Day Order from an array of logs.
  */
-export async function getSuggestedNextDayOrder(
-  classId: ClassId,
+export function getSuggestedNextDayOrderFromLogs(
+  allLogs: DayCycleEntry[],
   targetDate: string
-): Promise<{
+): {
   suggestedDay: DayNumber;
   previousWorkingDate?: string;
   previousDayNumber?: DayNumber;
-}> {
-  const allLogs = await getAllDayCycleLogs(classId);
-
-  // Filter logs strictly prior to target date and only working days (is_holiday === false and day_number != null)
+} {
   const priorWorkingDays = allLogs
     .filter(
       (l) => l.date < targetDate && !l.is_holiday && l.day_number !== null && l.day_number !== undefined
@@ -188,10 +181,28 @@ export async function getSuggestedNextDayOrder(
     };
   }
 
-  // If no prior dates exist, start at Day 1
   return {
     suggestedDay: 1,
   };
+}
+
+/**
+ * Calculate the suggested next Day Order (1–6) for a given target date.
+ * Looks for the most recent working date strictly before the target date.
+ * If previous was Day N -> suggests (N % 6) + 1.
+ * If no prior working date exists -> suggests Day 1.
+ * Holidays are skipped and do NOT consume a cycle slot!
+ */
+export async function getSuggestedNextDayOrder(
+  classId: ClassId,
+  targetDate: string
+): Promise<{
+  suggestedDay: DayNumber;
+  previousWorkingDate?: string;
+  previousDayNumber?: DayNumber;
+}> {
+  const allLogs = await getAllDayCycleLogs(classId);
+  return getSuggestedNextDayOrderFromLogs(allLogs, targetDate);
 }
 
 /**

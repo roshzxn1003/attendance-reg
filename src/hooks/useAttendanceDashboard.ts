@@ -20,7 +20,7 @@ export function useAttendanceDashboard(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const activeStudents = useMemo(() => students.filter((s) => s.active), [students]);
+  const activeStudents = useMemo(() => students.filter((s) => s.active !== false), [students]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -28,12 +28,13 @@ export function useAttendanceDashboard(
     try {
       const studentIds = activeStudents.map((s) => s.student_id);
 
-      // 1. Fetch records for selected date
-      const dateData = await fetchDateAttendance(classId, selectedDate, studentIds);
-      setDateRecords(dateData);
+      // Concurrent fetch for selected date and cumulative records
+      const [dateData, allData] = await Promise.all([
+        fetchDateAttendance(classId, selectedDate, studentIds),
+        fetchAllClassAttendance(classId, studentIds),
+      ]);
 
-      // 2. Fetch all historical records for this class
-      const allData = await fetchAllClassAttendance(classId, studentIds);
+      setDateRecords(dateData);
       setAllClassRecords(allData);
     } catch (err) {
       setError(String(err));

@@ -632,13 +632,13 @@ export const FacultySubjectReportPage: React.FC = () => {
               <thead>
                 {/* Header Row 1: Session Dates & Super Headers */}
                 <tr className="bg-slate-900 text-white font-extrabold border-b border-slate-800 text-[11px]">
-                  <th className="py-2.5 px-2 w-[44px] min-w-[44px] max-w-[44px] text-center sticky left-0 z-20 bg-slate-900 border-r border-slate-800 font-mono">
+                  <th className="py-2 px-1 sm:py-2.5 sm:px-2 w-[32px] min-w-[32px] max-w-[32px] sm:w-[44px] sm:min-w-[44px] sm:max-w-[44px] text-center sticky left-0 z-20 bg-slate-900 border-r border-slate-800 font-mono text-[10px] sm:text-[11px]">
                     No
                   </th>
-                  <th className="py-2.5 px-3 w-[116px] min-w-[116px] max-w-[116px] sticky left-[44px] z-20 bg-slate-900 border-r border-slate-800 font-mono text-left whitespace-nowrap">
+                  <th className="hidden sm:table-cell py-2.5 px-3 w-[116px] min-w-[116px] max-w-[116px] sm:sticky sm:left-[44px] z-20 bg-slate-900 border-r border-slate-800 font-mono text-left whitespace-nowrap">
                     Reg No
                   </th>
-                  <th className="py-2.5 px-3 w-[180px] min-w-[180px] max-w-[180px] sticky left-[160px] z-20 bg-slate-900 border-r border-slate-800 text-left truncate shadow-[3px_0_6px_-2px_rgba(0,0,0,0.3)]">
+                  <th className="py-2 px-1.5 sm:py-2.5 sm:px-3 w-[110px] min-w-[110px] max-w-[110px] sm:w-[180px] sm:min-w-[180px] sm:max-w-[180px] sticky left-[32px] sm:left-[160px] z-20 bg-slate-900 border-r border-slate-800 text-left text-[11px] sm:text-xs truncate shadow-[3px_0_6px_-2px_rgba(0,0,0,0.3)]">
                     Student Name
                   </th>
 
@@ -710,18 +710,23 @@ export const FacultySubjectReportPage: React.FC = () => {
                         )}
                       >
                         {/* No */}
-                        <td className="py-2 px-2 w-[44px] min-w-[44px] max-w-[44px] text-center text-[10px] font-mono text-slate-400 sticky left-0 z-10 bg-inherit border-r border-slate-200">
+                        <td className="py-2 px-1 sm:px-2 w-[32px] min-w-[32px] max-w-[32px] sm:w-[44px] sm:min-w-[44px] sm:max-w-[44px] text-center text-[10px] font-mono text-slate-400 sticky left-0 z-10 bg-white border-r border-slate-200">
                           {student.sNo}
                         </td>
 
                         {/* Reg No */}
-                        <td className="py-2 px-3 w-[116px] min-w-[116px] max-w-[116px] font-mono font-bold text-[11px] text-slate-900 sticky left-[44px] z-10 bg-inherit border-r border-slate-200 whitespace-nowrap text-left">
+                        <td className="hidden sm:table-cell py-2 px-3 w-[116px] min-w-[116px] max-w-[116px] font-mono font-bold text-[11px] text-slate-900 sm:sticky sm:left-[44px] z-10 bg-white border-r border-slate-200 whitespace-nowrap text-left">
                           {student.student_id}
                         </td>
 
                         {/* Student Name */}
-                        <td className="py-2 px-3 w-[180px] min-w-[180px] max-w-[180px] font-bold text-slate-900 sticky left-[160px] z-10 bg-inherit border-r border-slate-200 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] truncate text-left">
-                          {student.student_name}
+                        <td className="py-1.5 px-1.5 sm:py-2 sm:px-3 w-[110px] min-w-[110px] max-w-[110px] sm:w-[180px] sm:min-w-[180px] sm:max-w-[180px] font-bold text-slate-900 sticky left-[32px] sm:left-[160px] z-10 bg-white border-r border-slate-200 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.08)] text-left">
+                          <div className="truncate font-bold text-[11px] sm:text-xs">
+                            {student.student_name}
+                          </div>
+                          <div className="text-[9px] text-slate-400 font-mono truncate sm:hidden leading-none mt-0.5">
+                            {student.student_id}
+                          </div>
                         </td>
 
                         {/* Session Marks */}

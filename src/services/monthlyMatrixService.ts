@@ -102,19 +102,21 @@ export async function generateDateRangeMatrix(
   onlyMarkedDates = false,
   customRangeLabel?: string
 ): Promise<MonthlyMatrixData> {
-  // 1. Fetch Students
-  const allStudents = await fetchStudents(classId);
-  const activeStudents = allStudents.filter((s) => s.active);
+  // 1. Fetch Students and Day Cycle Logs concurrently
+  const [allStudents, dayLogs] = await Promise.all([
+    fetchStudents(classId),
+    getAllDayCycleLogs(classId),
+  ]);
+
+  const activeStudents = allStudents.filter((s) => s.active !== false);
   const studentIds = activeStudents.map((s) => s.student_id);
 
-  // 2. Fetch Day Cycle Logs
-  const dayLogs = await getAllDayCycleLogs(classId);
   const dayLogMap = new Map<string, DayCycleEntry>();
   for (const l of dayLogs) {
     dayLogMap.set(l.date, l);
   }
 
-  // 3. Fetch Attendance within date range
+  // 2. Fetch Attendance within date range
   const rawRecords = await fetchDateRangeClassAttendance(classId, startDate, endDate, studentIds);
 
   // Map attendance by `${student_id}_${date}_${period}`

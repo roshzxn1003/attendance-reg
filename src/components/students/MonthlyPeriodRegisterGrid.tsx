@@ -488,7 +488,13 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
           {/* Lock / Unlock Sticky Student Names (Left) */}
           <button
             type="button"
-            onClick={() => setLockLeftNames(!lockLeftNames)}
+            onClick={() => {
+              const next = !lockLeftNames;
+              setLockLeftNames(next);
+              if (next && typeof window !== 'undefined' && window.innerWidth < 768) {
+                setLockRightTotals(false);
+              }
+            }}
             className={cn(
               'px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer select-none',
               lockLeftNames
@@ -498,13 +504,19 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
             title="Lock or unlock student names on the left side while scrolling"
           >
             {lockLeftNames ? <Pin className="w-3.5 h-3.5 text-blue-600" /> : <PinOff className="w-3.5 h-3.5 text-slate-400" />}
-            <span>{lockLeftNames ? 'Names Locked (Left)' : 'Free Scroll (Left)'}</span>
+            <span>{lockLeftNames ? 'Names Locked' : 'Free Scroll (Left)'}</span>
           </button>
 
           {/* Lock / Unlock Sticky Totals (Right) */}
           <button
             type="button"
-            onClick={() => setLockRightTotals(!lockRightTotals)}
+            onClick={() => {
+              const next = !lockRightTotals;
+              setLockRightTotals(next);
+              if (next && typeof window !== 'undefined' && window.innerWidth < 768) {
+                setLockLeftNames(false);
+              }
+            }}
             className={cn(
               'px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer select-none',
               lockRightTotals
@@ -514,7 +526,7 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
             title="Lock or unlock final totals columns on the right side while scrolling"
           >
             {lockRightTotals ? <Pin className="w-3.5 h-3.5 text-emerald-600" /> : <PinOff className="w-3.5 h-3.5 text-slate-400" />}
-            <span>{lockRightTotals ? 'Totals Locked (Right)' : 'Free Scroll (Right)'}</span>
+            <span>{lockRightTotals ? 'Totals Locked' : 'Free Scroll (Right)'}</span>
           </button>
 
           {/* Jump Scroll Buttons */}
@@ -561,11 +573,11 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
               <thead className="sticky top-0 z-30 bg-slate-100 shadow-xs">
                 {/* Level 1 Header: Date Spans */}
                 <tr className="border-b border-slate-300 text-slate-700 font-bold uppercase text-[11px]">
-                  {/* Leading Fixed Columns (Exact Pixel Positions to Avoid Any Overlap) */}
+                  {/* Leading Fixed Columns (Exact Pixel Positions on Mobile & Desktop) */}
                   <th
                     rowSpan={2}
                     className={cn(
-                      'py-2.5 px-2 w-[44px] min-w-[44px] max-w-[44px] border-r border-slate-300 bg-slate-100 font-mono text-center',
+                      'py-2 px-1 sm:py-2.5 sm:px-2 w-[32px] min-w-[32px] max-w-[32px] sm:w-[44px] sm:min-w-[44px] sm:max-w-[44px] border-r border-slate-300 bg-slate-100 font-mono text-center text-[10px] sm:text-[11px]',
                       lockLeftNames && 'sticky left-0 z-40'
                     )}
                   >
@@ -574,8 +586,8 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                   <th
                     rowSpan={2}
                     className={cn(
-                      'py-2.5 px-3 w-[116px] min-w-[116px] max-w-[116px] border-r border-slate-300 bg-slate-100 font-mono text-left whitespace-nowrap',
-                      lockLeftNames && 'sticky left-[44px] z-40'
+                      'hidden sm:table-cell py-2.5 px-3 w-[116px] min-w-[116px] max-w-[116px] border-r border-slate-300 bg-slate-100 font-mono text-left whitespace-nowrap text-[11px]',
+                      lockLeftNames && 'sm:sticky sm:left-[44px] z-40'
                     )}
                   >
                     Reg No
@@ -583,8 +595,8 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                   <th
                     rowSpan={2}
                     className={cn(
-                      'py-2.5 px-3 w-[180px] min-w-[180px] max-w-[180px] border-r-2 border-slate-400 bg-slate-100 text-left font-bold truncate',
-                      lockLeftNames && 'sticky left-[160px] z-40 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.12)]'
+                      'py-2 px-1.5 sm:py-2.5 sm:px-3 w-[110px] min-w-[110px] max-w-[110px] sm:w-[180px] sm:min-w-[180px] sm:max-w-[180px] border-r-2 border-slate-400 bg-slate-100 text-left font-bold text-[11px] sm:text-xs truncate',
+                      lockLeftNames && 'sticky left-[32px] sm:left-[160px] z-40 shadow-[3px_0_6px_-2px_rgba(0,0,0,0.12)]'
                     )}
                   >
                     Student Name
@@ -623,8 +635,8 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                   <th
                     rowSpan={2}
                     className={cn(
-                      'py-2.5 px-2 w-[64px] min-w-[64px] max-w-[64px] border-l-2 border-r border-slate-300 bg-slate-200 text-slate-800 font-bold text-[10px]',
-                      lockRightTotals && 'sticky right-[268px] z-40 shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)]'
+                      'hidden sm:table-cell py-2.5 px-2 w-[64px] min-w-[64px] max-w-[64px] border-l-2 border-r border-slate-300 bg-slate-200 text-slate-800 font-bold text-[10px]',
+                      lockRightTotals && 'sm:sticky sm:right-[268px] z-40 shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)]'
                     )}
                   >
                     WORKING
@@ -632,8 +644,8 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                   <th
                     rowSpan={2}
                     className={cn(
-                      'py-2.5 px-2.5 w-[88px] min-w-[88px] max-w-[88px] border-r border-slate-300 bg-emerald-100 text-emerald-950 font-black text-[10px] tracking-tight leading-tight',
-                      lockRightTotals && 'sticky right-[180px] z-40'
+                      'py-2 px-1 sm:py-2.5 sm:px-2.5 w-[56px] min-w-[56px] max-w-[56px] sm:w-[88px] sm:min-w-[88px] sm:max-w-[88px] border-l-2 sm:border-l-0 border-r border-slate-300 bg-emerald-100 text-emerald-950 font-black text-[9px] sm:text-[10px] tracking-tight leading-tight',
+                      lockRightTotals && 'sticky right-[64px] sm:right-[180px] z-40 shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)] sm:shadow-none'
                     )}
                   >
                     TOTAL PRESENT
@@ -641,8 +653,8 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                   <th
                     rowSpan={2}
                     className={cn(
-                      'py-2.5 px-2 w-[48px] min-w-[48px] max-w-[48px] border-r border-slate-300 bg-amber-100 text-amber-900 font-bold text-[10px]',
-                      lockRightTotals && 'sticky right-[132px] z-40'
+                      'hidden sm:table-cell py-2.5 px-2 w-[48px] min-w-[48px] max-w-[48px] border-r border-slate-300 bg-amber-100 text-amber-900 font-bold text-[10px]',
+                      lockRightTotals && 'sm:sticky sm:right-[132px] z-40'
                     )}
                   >
                     OD
@@ -650,8 +662,8 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                   <th
                     rowSpan={2}
                     className={cn(
-                      'py-2.5 px-2 w-[50px] min-w-[50px] max-w-[50px] border-r border-slate-300 bg-rose-100 text-rose-900 font-bold text-[10px]',
-                      lockRightTotals && 'sticky right-[82px] z-40'
+                      'hidden sm:table-cell py-2.5 px-2 w-[50px] min-w-[50px] max-w-[50px] border-r border-slate-300 bg-rose-100 text-rose-900 font-bold text-[10px]',
+                      lockRightTotals && 'sm:sticky sm:right-[82px] z-40'
                     )}
                   >
                     ABSENT
@@ -659,7 +671,7 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                   <th
                     rowSpan={2}
                     className={cn(
-                      'py-2.5 px-3 w-[82px] min-w-[82px] max-w-[82px] bg-slate-950 text-white font-black text-[10px] text-right',
+                      'py-2 px-1.5 sm:py-2.5 sm:px-3 w-[64px] min-w-[64px] max-w-[64px] sm:w-[82px] sm:min-w-[82px] sm:max-w-[82px] bg-slate-950 text-white font-black text-[9px] sm:text-[10px] text-right',
                       lockRightTotals && 'sticky right-0 z-40'
                     )}
                   >
@@ -675,7 +687,7 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                         <th
                           key={`${col.dateStr}_p${p}`}
                           className={cn(
-                            'py-1 px-1 w-7 border-r border-slate-200',
+                            'py-1 px-1 w-7 min-w-7 max-w-7 border-r border-slate-200',
                             p === 7 && 'border-r-slate-300'
                           )}
                         >
@@ -714,32 +726,37 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                         {/* 1. S.No */}
                         <td
                           className={cn(
-                            'py-1.5 px-2 w-[44px] min-w-[44px] max-w-[44px] font-mono font-bold text-slate-500 bg-white border-r border-slate-200 text-center text-[11px] group-hover:bg-blue-50/60',
+                            'py-1.5 px-1 sm:px-2 w-[32px] min-w-[32px] max-w-[32px] sm:w-[44px] sm:min-w-[44px] sm:max-w-[44px] font-mono font-bold text-slate-500 bg-white border-r border-slate-200 text-center text-[10px] sm:text-[11px] group-hover:bg-blue-50/60',
                             lockLeftNames && 'sticky left-0 z-20 bg-white'
                           )}
                         >
                           {s.sNo}
                         </td>
 
-                        {/* 2. Reg No */}
+                        {/* 2. Reg No (Hidden on mobile when pinned to preserve screen space) */}
                         <td
                           className={cn(
-                            'py-1.5 px-3 w-[116px] min-w-[116px] max-w-[116px] font-mono font-bold text-slate-900 bg-white border-r border-slate-200 text-left whitespace-nowrap text-[11px] group-hover:bg-blue-50/60',
-                            lockLeftNames && 'sticky left-[44px] z-20 bg-white'
+                            'hidden sm:table-cell py-1.5 px-3 w-[116px] min-w-[116px] max-w-[116px] font-mono font-bold text-slate-900 bg-white border-r border-slate-200 text-left whitespace-nowrap text-[11px] group-hover:bg-blue-50/60',
+                            lockLeftNames && 'sm:sticky sm:left-[44px] z-20 bg-white'
                           )}
                         >
                           {s.regNo}
                         </td>
 
-                        {/* 3. Student Name */}
+                        {/* 3. Student Name (with mobile Reg No subtitle) */}
                         <td
                           className={cn(
-                            'py-1.5 px-3 w-[180px] min-w-[180px] max-w-[180px] font-bold text-slate-900 bg-white border-r-2 border-slate-400 text-left truncate text-xs group-hover:bg-blue-50/60',
-                            lockLeftNames && 'sticky left-[160px] z-20 bg-white shadow-[3px_0_6px_-2px_rgba(0,0,0,0.12)]'
+                            'py-1 px-1.5 sm:py-1.5 sm:px-3 w-[110px] min-w-[110px] max-w-[110px] sm:w-[180px] sm:min-w-[180px] sm:max-w-[180px] font-bold text-slate-900 bg-white border-r-2 border-slate-400 text-left text-xs group-hover:bg-blue-50/60',
+                            lockLeftNames && 'sticky left-[32px] sm:left-[160px] z-20 bg-white shadow-[3px_0_6px_-2px_rgba(0,0,0,0.12)]'
                           )}
                           title={s.studentName}
                         >
-                          {s.studentName}
+                          <div className="truncate font-bold text-[11px] sm:text-xs" title={s.studentName}>
+                            {s.studentName}
+                          </div>
+                          <div className="text-[9px] text-slate-400 font-mono truncate sm:hidden leading-none mt-0.5">
+                            {s.regNo}
+                          </div>
                         </td>
 
                         {/* 4. Periods for Each Date */}
@@ -755,7 +772,7 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                                 <td
                                   key={`${s.regNo}_${col.dateStr}_p${p}`}
                                   className={cn(
-                                    'py-1 px-0.5 w-7 text-center font-mono font-bold text-[11px] border-r border-slate-100 transition-colors',
+                                    'py-1 px-0.5 w-7 min-w-7 max-w-7 text-center font-mono font-bold text-[11px] border-r border-slate-100 transition-colors',
                                     p === 7 && 'border-r-slate-300',
                                     isP && 'text-emerald-700 bg-emerald-50/40',
                                     isA && 'text-rose-700 bg-rose-100/70 font-black',
@@ -785,8 +802,8 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                         {/* Working Hours */}
                         <td
                           className={cn(
-                            'py-1.5 px-2 w-[64px] min-w-[64px] max-w-[64px] font-mono font-bold text-slate-700 bg-slate-100/90 border-l-2 border-r border-slate-300 text-center text-xs group-hover:bg-slate-200',
-                            lockRightTotals && 'sticky right-[268px] z-20 shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)]'
+                            'hidden sm:table-cell py-1.5 px-2 w-[64px] min-w-[64px] max-w-[64px] font-mono font-bold text-slate-700 bg-slate-100/90 border-l-2 border-r border-slate-300 text-center text-xs group-hover:bg-slate-200',
+                            lockRightTotals && 'sm:sticky sm:right-[268px] z-20 shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)]'
                           )}
                         >
                           {s.totalWorking}
@@ -795,8 +812,8 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                         {/* Present Hours */}
                         <td
                           className={cn(
-                            'py-1.5 px-2.5 w-[88px] min-w-[88px] max-w-[88px] font-black font-mono text-emerald-950 bg-emerald-50/90 border-r border-slate-300 text-center text-xs group-hover:bg-emerald-100',
-                            lockRightTotals && 'sticky right-[180px] z-20'
+                            'py-1 px-1 sm:py-1.5 sm:px-2.5 w-[56px] min-w-[56px] max-w-[56px] sm:w-[88px] sm:min-w-[88px] sm:max-w-[88px] font-black font-mono text-emerald-950 bg-emerald-50/90 border-l-2 sm:border-l-0 border-r border-slate-300 text-center text-[11px] sm:text-xs group-hover:bg-emerald-100',
+                            lockRightTotals && 'sticky right-[64px] sm:right-[180px] z-20 shadow-[-3px_0_6px_-2px_rgba(0,0,0,0.12)] sm:shadow-none'
                           )}
                         >
                           {s.totalPresent}
@@ -805,8 +822,8 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                         {/* OD Hours */}
                         <td
                           className={cn(
-                            'py-1.5 px-2 w-[48px] min-w-[48px] max-w-[48px] font-mono font-bold text-amber-900 bg-amber-50/90 border-r border-slate-200 text-center text-xs group-hover:bg-amber-100',
-                            lockRightTotals && 'sticky right-[132px] z-20'
+                            'hidden sm:table-cell py-1.5 px-2 w-[48px] min-w-[48px] max-w-[48px] font-mono font-bold text-amber-900 bg-amber-50/90 border-r border-slate-200 text-center text-xs group-hover:bg-amber-100',
+                            lockRightTotals && 'sm:sticky sm:right-[132px] z-20'
                           )}
                         >
                           {s.totalOD}
@@ -815,8 +832,8 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                         {/* Absent Hours */}
                         <td
                           className={cn(
-                            'py-1.5 px-2 w-[50px] min-w-[50px] max-w-[50px] font-mono font-bold text-rose-900 bg-rose-50/90 border-r border-slate-200 text-center text-xs group-hover:bg-rose-100',
-                            lockRightTotals && 'sticky right-[82px] z-20'
+                            'hidden sm:table-cell py-1.5 px-2 w-[50px] min-w-[50px] max-w-[50px] font-mono font-bold text-rose-900 bg-rose-50/90 border-r border-slate-200 text-center text-xs group-hover:bg-rose-100',
+                            lockRightTotals && 'sm:sticky sm:right-[82px] z-20'
                           )}
                         >
                           {s.totalAbsent}
@@ -825,7 +842,7 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                         {/* Attendance % */}
                         <td
                           className={cn(
-                            'py-1.5 px-3 w-[82px] min-w-[82px] max-w-[82px] font-mono font-black text-right text-xs bg-slate-100 group-hover:bg-slate-200',
+                            'py-1 px-1.5 sm:py-1.5 sm:px-3 w-[64px] min-w-[64px] max-w-[64px] sm:w-[82px] sm:min-w-[82px] sm:max-w-[82px] font-mono font-black text-right text-[11px] sm:text-xs bg-slate-100 group-hover:bg-slate-200',
                             lockRightTotals && 'sticky right-0 z-20',
                             s.percentage < 75 ? 'text-rose-700 bg-rose-50' : 'text-slate-900'
                           )}

@@ -7,7 +7,7 @@
 
 import { ClassId, PeriodNumber, AttendanceStatus, DayNumber } from '../types';
 import { Student } from './studentService';
-import { saveMultiplePeriodsAttendance, fetchDateAttendance, AttendanceItem } from './attendanceService';
+import { saveRawAttendanceBatch, fetchDateAttendance, AttendanceItem } from './attendanceService';
 import { setWorkingDayOrder, markHolidayForDate, getAllDayCycleLogs, DayCycleEntry } from './dayCycleService';
 import { fetchDateRangeClassAttendance } from './monthlyAttendanceService';
 
@@ -385,48 +385,46 @@ export async function saveDayBacklogAttendance(
   // Case 2: Working Day — Save Day Order first
   await setWorkingDayOrder(classId, date, dayOrderNumber, `Rapid Backlog Entry - Day Order ${dayOrderNumber}`);
 
-  // Build attendance records for all 7 periods
-  // Default: Every student is 'P' across all 7 periods
-  // Override: Any student in absenteeEntries gets 'A' or 'OD' based on their period scope
+  // Build atomic attendance records for all 7 periods in one single array
   const all7Periods: PeriodNumber[] = [1, 2, 3, 4, 5, 6, 7];
+  const allRecordsToSave: AttendanceItem[] = [];
+  const now = new Date().toISOString();
 
   for (const period of all7Periods) {
-    const studentMarks: Array<{ student_id: string; status: AttendanceStatus }> = activeStudents.map(
-      (student) => {
-        // Check if student is listed in absentees for this period
-        const match = absenteeEntries.find((a) => a.student.student_id === student.student_id);
+    for (const student of activeStudents) {
+      const match = absenteeEntries.find((a) => a.student.student_id === student.student_id);
+      let studentStatus: AttendanceStatus = 'P';
 
-        if (match) {
-          let appliesToPeriod = false;
-          if (match.periodScope === 'fullday') {
-            appliesToPeriod = true;
-          } else if (match.periodScope === 'morning' && period <= 4) {
-            appliesToPeriod = true;
-          } else if (match.periodScope === 'afternoon' && period >= 5) {
-            appliesToPeriod = true;
-          } else if (match.periodScope === 'custom' && match.customPeriods.includes(period)) {
-            appliesToPeriod = true;
-          }
-
-          if (appliesToPeriod) {
-            return {
-              student_id: student.student_id,
-              status: match.status,
-            };
-          }
+      if (match) {
+        let appliesToPeriod = false;
+        if (match.periodScope === 'fullday') {
+          appliesToPeriod = true;
+        } else if (match.periodScope === 'morning' && period <= 4) {
+          appliesToPeriod = true;
+        } else if (match.periodScope === 'afternoon' && period >= 5) {
+          appliesToPeriod = true;
+        } else if (match.periodScope === 'custom' && match.customPeriods.includes(period)) {
+          appliesToPeriod = true;
         }
 
-        // Otherwise Present
-        return {
-          student_id: student.student_id,
-          status: 'P',
-        };
+        if (appliesToPeriod) {
+          studentStatus = match.status;
+        }
       }
-    );
 
-    // Save period attendance
-    await saveMultiplePeriodsAttendance(classId, date, [period], studentMarks);
+      allRecordsToSave.push({
+        student_id: student.student_id,
+        class_id: classId,
+        date,
+        period_number: period,
+        status: studentStatus,
+        marked_at: now,
+      });
+    }
   }
+
+  // Save all 7 periods atomically in ONE single database upsert
+  await saveRawAttendanceBatch(allRecordsToSave);
 
   return {
     success: true,
@@ -434,3 +432,4 @@ export async function saveDayBacklogAttendance(
     message: `Successfully saved all 7 periods for ${date} (Day Order ${dayOrderNumber}) with ${absenteeEntries.length} absentees.`,
   };
 }
+

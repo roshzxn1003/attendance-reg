@@ -6,7 +6,7 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { AttendanceStatus, ClassId, PeriodNumber } from '../types';
 import { getSubjectForSlot, PERIOD_TIMINGS } from '../data/timetable';
-import { getDayCycleForDate } from './dayCycleService';
+import { getAllDayCycleLogs, DayCycleEntry } from './dayCycleService';
 
 export interface StudentHistoryRecord {
   attendance_id: string;
@@ -37,45 +37,61 @@ export async function fetchStudentHistory(
   studentId: string,
   classId: ClassId
 ): Promise<{ history: StudentHistoryRecord[]; stats: StudentProfileStats }> {
-  let rawRecords: Array<{
-    attendance_id?: string;
-    student_id: string;
-    date: string;
-    period_number: PeriodNumber;
-    status: AttendanceStatus;
-    marked_at?: string;
-  }> = [];
+  // Fetch raw student records and day cycle logs concurrently
+  const [recordsResult, dayLogs] = await Promise.all([
+    (async () => {
+      let records: Array<{
+        attendance_id?: string;
+        student_id: string;
+        date: string;
+        period_number: PeriodNumber;
+        status: AttendanceStatus;
+        marked_at?: string;
+      }> = [];
 
-  if (isSupabaseConfigured()) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sb = supabase as any;
-      const { data, error } = await sb
-        .from('attendance')
-        .select('*')
-        .eq('student_id', studentId)
-        .order('date', { ascending: false })
-        .order('period_number', { ascending: true });
+      if (isSupabaseConfigured()) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const sb = supabase as any;
+          const { data, error } = await sb
+            .from('attendance')
+            .select('*')
+            .eq('student_id', studentId)
+            .order('date', { ascending: false })
+            .order('period_number', { ascending: true });
 
-      if (!error && data) {
-        rawRecords = data;
+          if (!error && data) {
+            records = data;
+          }
+        } catch {
+          // fallback below
+        }
       }
-    } catch {
-      // fallback below
-    }
-  }
 
-  // Fallback to local storage if empty
-  if (rawRecords.length === 0) {
-    try {
-      const raw = localStorage.getItem(LOCAL_STORAGE_ATTENDANCE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as typeof rawRecords;
-        rawRecords = parsed.filter((r) => r.student_id === studentId);
+      // Fallback to local storage if empty
+      if (records.length === 0) {
+        try {
+          const raw = localStorage.getItem(LOCAL_STORAGE_ATTENDANCE_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw) as typeof records;
+            records = parsed.filter((r) => r.student_id === studentId);
+          }
+        } catch {
+          // ignore
+        }
       }
-    } catch {
-      // ignore
-    }
+
+      return records;
+    })(),
+    getAllDayCycleLogs(classId),
+  ]);
+
+  const rawRecords = recordsResult;
+
+  // Build Map for O(1) day cycle lookups
+  const dayLogMap = new Map<string, DayCycleEntry>();
+  for (const log of dayLogs) {
+    dayLogMap.set(log.date, log);
   }
 
   // Sort descending by date, ascending by period
@@ -84,7 +100,7 @@ export async function fetchStudentHistory(
     return a.period_number - b.period_number;
   });
 
-  // Resolve day numbers, subjects, and timings for each record
+  // Resolve day numbers, subjects, and timings in memory (0ms)
   const history: StudentHistoryRecord[] = [];
   let presentHours = 0;
   let absentHours = 0;
@@ -95,8 +111,8 @@ export async function fetchStudentHistory(
     else if (r.status === 'A') absentHours++;
     else if (r.status === 'OD') odHours++;
 
-    // Resolve Day Cycle Log for that date
-    const dayCycle = await getDayCycleForDate(classId, r.date);
+    // Resolve Day Cycle Log for that date from in-memory Map
+    const dayCycle = dayLogMap.get(r.date);
     const dayNum = dayCycle?.day_number || 1;
 
     // Resolve Subject

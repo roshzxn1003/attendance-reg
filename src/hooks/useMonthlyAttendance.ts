@@ -18,7 +18,7 @@ export function useMonthlyAttendance(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const activeStudents = useMemo(() => students.filter((s) => s.active), [students]);
+  const activeStudents = useMemo(() => students.filter((s) => s.active !== false), [students]);
 
   const loadMonthData = useCallback(async () => {
     setLoading(true);
