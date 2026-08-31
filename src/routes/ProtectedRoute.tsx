@@ -17,6 +17,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
+    // If faculty, redirect to faculty subject report portal
+    if (user.role === 'faculty') {
+      const defaultSubj = user.defaultSubject || (user.assignedSubjects && user.assignedSubjects[0]);
+      const targetPath = defaultSubj ? `/faculty-report?subject=${encodeURIComponent(defaultSubj)}` : '/faculty-report';
+      return <Navigate to={targetPath} replace />;
+    }
     // If student, redirect to student portal
     if (user.role === 'student') {
       return <Navigate to="/student-portal" replace />;

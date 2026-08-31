@@ -10,6 +10,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { AuthUser, LoginResult } from '../types/auth';
 import { fetchStudents } from './studentService';
 import { MASTER_STUDENTS } from '../data/students';
+import { getFacultyByIdentifier } from '../data/faculty';
 
 const AUTH_STORAGE_KEY = 'smart_cr_auth_user';
 const CUSTOM_PASSWORDS_KEY = 'smart_cr_custom_passwords';
@@ -341,7 +342,90 @@ export async function loginAdmin(
 }
 
 /**
- * Change Password for any user (Student, CR, Admin)
+ * Faculty / Subject In-Charge Login
+ * Allows faculty to login with their subject short code (e.g. 'os', 'dbms', 'dm', 'daa', 'iot', 'ca', 'uhv')
+ * or their college email ID (e.g. 'faculty.os@spiher.ac.in').
+ */
+export async function loginFaculty(
+  identifier: string,
+  password: string
+): Promise<LoginResult> {
+  const cleanId = identifier.trim().toLowerCase();
+  const cleanPass = password.trim();
+
+  if (!cleanId) {
+    return { success: false, error: 'Please enter your subject code or faculty email ID.' };
+  }
+
+  // 1. Find matching faculty record
+  const faculty = getFacultyByIdentifier(cleanId);
+  if (!faculty) {
+    return {
+      success: false,
+      error: `Unrecognized subject or faculty ID "${identifier}". Use your subject code (e.g. OS, DBMS, DAA, DM, IOT, CA, UHV) or email.`,
+    };
+  }
+
+  // 2. Try Supabase Auth if online
+  if (isSupabaseConfigured() && faculty.email.includes('@')) {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: faculty.email,
+        password: cleanPass,
+      });
+
+      if (!error && data.user) {
+        const authUser: AuthUser = {
+          id: data.user.id,
+          email: faculty.email,
+          name: faculty.name,
+          role: 'faculty',
+          class_id: 'CSE-25',
+          assignedSubjects: faculty.assignedSubjects,
+          defaultSubject: faculty.defaultSubject,
+          facultyName: `${faculty.name} (${faculty.designation})`,
+        };
+        setStoredUser(authUser);
+        return { success: true, user: authUser };
+      }
+    } catch {
+      // fallback below
+    }
+  }
+
+  // 3. Check custom password override or default faculty password
+  const customMap = getCustomPasswords();
+  const customPass =
+    customMap[cleanId] ||
+    customMap[faculty.username.toLowerCase()] ||
+    customMap[faculty.email.toLowerCase()];
+
+  const isValid = customPass ? cleanPass === customPass : cleanPass === faculty.defaultPassword;
+
+  if (!isValid) {
+    return {
+      success: false,
+      error: `Invalid password for ${faculty.name} (${faculty.assignedSubjects.join(', ')}). Please verify credentials.`,
+    };
+  }
+
+  const authUser: AuthUser = {
+    id: faculty.id,
+    email: faculty.email,
+    name: faculty.name,
+    role: 'faculty',
+    class_id: 'CSE-25',
+    assignedSubjects: faculty.assignedSubjects,
+    defaultSubject: faculty.defaultSubject,
+    facultyName: `${faculty.name} (${faculty.designation})`,
+  };
+
+  setStoredUser(authUser);
+  return { success: true, user: authUser };
+}
+
+/**
+ * Change Password for any user (Student, CR, Faculty, Admin)
  */
 export async function changeUserPassword(
   identifier: string,
@@ -383,7 +467,13 @@ export async function changeUserPassword(
   } else if (cleanId.includes('cr')) {
     currentValid = DEFAULT_CR_PASSWORDS.includes(cleanOld);
   } else {
-    currentValid = cleanOld === DEFAULT_STUDENT_PASSWORD;
+    // Check if faculty
+    const faculty = getFacultyByIdentifier(cleanId);
+    if (faculty) {
+      currentValid = cleanOld === faculty.defaultPassword;
+    } else {
+      currentValid = cleanOld === DEFAULT_STUDENT_PASSWORD;
+    }
   }
 
   if (!currentValid) {

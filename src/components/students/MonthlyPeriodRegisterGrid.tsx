@@ -49,7 +49,7 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
   // Range Mode & Dates
   const [rangeMode, setRangeMode] = useState<RangeSelectionMode>('single_month');
   const [selectedMonth, setSelectedMonth] = useState<string>('2026-08');
-  const [selectedPreset, setSelectedPreset] = useState<string>('5m-semester');
+  const [selectedPreset, setSelectedPreset] = useState<string>('6m-semester');
   const [customStartDate, setCustomStartDate] = useState<string>('2026-08-01');
   const [customEndDate, setCustomEndDate] = useState<string>('2026-12-31');
 

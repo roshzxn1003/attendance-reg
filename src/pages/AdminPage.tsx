@@ -123,7 +123,7 @@ export const AdminPage: React.FC = () => {
                 </CardDescription>
               </div>
               <Badge variant="info" size="md">
-                {students.filter((s) => s.active).length} Active / {students.length} Total
+                {students.filter((s) => s.active !== false).length} Active / {students.length} Total
               </Badge>
             </CardHeader>
             <CardContent>

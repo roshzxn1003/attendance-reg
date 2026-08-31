@@ -288,6 +288,7 @@ export async function saveMultiplePeriodsAttendance(
     for (const m of studentMarks) {
       payload.push({
         student_id: m.student_id,
+        class_id: classId,
         date,
         period_number: p,
         status: m.status,

@@ -122,6 +122,23 @@ export const AttendancePage: React.FC<AttendancePageProps> = ({ initialView }) =
     setSelectedPeriods([p]);
   };
 
+  const selectLabPeriods = () => {
+    const labPeriods = PERIOD_TIMINGS
+      .map((slot) => slot.period)
+      .filter((p) => {
+        const dbSlot = activeDayNumber
+          ? timetableEntries.find((t) => t.day_number === activeDayNumber && t.period_number === p)
+          : undefined;
+        const subj = dbSlot?.subject || (activeDayNumber ? getSubjectForSlot(activeDayNumber, p, selectedClass.id) : '');
+        return subj.toUpperCase().includes('LAB');
+      });
+    if (labPeriods.length > 0) {
+      setSelectedPeriods(labPeriods);
+    } else {
+      setSelectedPeriods([2, 3, 4]);
+    }
+  };
+
   // Compute composite active subject & timings for multi-period selection
   const selectedSlots = selectedPeriods.map((p) => {
     const dbSlot = activeDayNumber
@@ -141,7 +158,7 @@ export const AttendancePage: React.FC<AttendancePageProps> = ({ initialView }) =
 
   const compositeTiming = selectedSlots.length === 1
     ? selectedSlots[0].timing
-    : `${selectedSlots[0]?.timing.split(' – ')[0] || ''} – ${selectedSlots[selectedSlots.length - 1]?.timing.split(' – ')[1] || ''}`;
+    : `${selectedSlots[0]?.timing.split(/\s*[–—-]\s*/)[0] || ''} – ${selectedSlots[selectedSlots.length - 1]?.timing.split(/\s*[–—-]\s*/)[1] || ''}`;
 
   return (
     <div className="space-y-5 pb-12">
@@ -372,6 +389,14 @@ export const AttendancePage: React.FC<AttendancePageProps> = ({ initialView }) =
                       className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-white text-slate-600 border border-slate-300 hover:bg-slate-50 cursor-pointer"
                     >
                       P5–P7
+                    </button>
+                    <button
+                      type="button"
+                      onClick={selectLabPeriods}
+                      className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 hover:border-purple-300 cursor-pointer"
+                      title="Select Lab session block (P2, P3, P4)"
+                    >
+                      Lab (P2–P4)
                     </button>
                     {selectedPeriods.length > 1 && (
                       <button

@@ -106,7 +106,7 @@ export const router = createBrowserRouter([
   {
     path: '/faculty-report',
     element: (
-      <ProtectedRoute allowedRoles={['cr', 'admin']}>
+      <ProtectedRoute allowedRoles={['faculty', 'admin']}>
         <AppLayout>
           {withSuspense(<FacultySubjectReportPage />)}
         </AppLayout>
@@ -116,7 +116,7 @@ export const router = createBrowserRouter([
   {
     path: '/subject-report',
     element: (
-      <ProtectedRoute allowedRoles={['cr', 'admin']}>
+      <ProtectedRoute allowedRoles={['faculty', 'admin']}>
         <AppLayout>
           {withSuspense(<FacultySubjectReportPage />)}
         </AppLayout>

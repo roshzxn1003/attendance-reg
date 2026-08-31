@@ -5,7 +5,7 @@ import { useApp } from '../context/AppContext';
 import { ClassId } from '../types';
 import { useStudents } from '../hooks/useStudents';
 import { RapidDayEntryWizard } from '../components/backlog/RapidDayEntryWizard';
-import { CheckCircle2, Users, BookOpen } from 'lucide-react';
+import { CheckCircle2, Users, CalendarCheck2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { NavLink } from 'react-router-dom';
 
@@ -260,11 +260,11 @@ export const BacklogEntryPage: React.FC = () => {
             </NavLink>
 
             <NavLink
-              to="/faculty-report"
+              to="/attendance"
               className="px-3.5 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
             >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>Faculty Subject Reports</span>
+              <CalendarCheck2 className="w-3.5 h-3.5" />
+              <span>Mark Today's Attendance</span>
             </NavLink>
           </div>
         </div>

@@ -5,6 +5,7 @@ import {
   loginStudent,
   loginCR,
   loginAdmin,
+  loginFaculty,
   logoutUser,
 } from '../services/authService';
 
@@ -13,9 +14,11 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isAdmin: boolean;
   isCR: boolean;
+  isFaculty: boolean;
   isStudent: boolean;
   loginAsStudent: (identifier: string, pass: string) => Promise<LoginResult>;
   loginAsCR: (identifier: string, pass: string) => Promise<LoginResult>;
+  loginAsFaculty: (identifier: string, pass: string) => Promise<LoginResult>;
   loginAsAdmin: (identifier: string, pass: string) => Promise<LoginResult>;
   logout: () => void;
 }
@@ -48,6 +51,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return result;
   };
 
+  const handleLoginFaculty = async (id: string, pass: string): Promise<LoginResult> => {
+    const result = await loginFaculty(id, pass);
+    if (result.success && result.user) {
+      setUser(result.user);
+    }
+    return result;
+  };
+
   const handleLoginAdmin = async (id: string, pass: string): Promise<LoginResult> => {
     const result = await loginAdmin(id, pass);
     if (result.success && result.user) {
@@ -66,9 +77,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAuthenticated: Boolean(user),
     isAdmin: user?.role === 'admin',
     isCR: user?.role === 'cr' || user?.role === 'admin',
+    isFaculty: user?.role === 'faculty',
     isStudent: user?.role === 'student',
     loginAsStudent: handleLoginStudent,
     loginAsCR: handleLoginCR,
+    loginAsFaculty: handleLoginFaculty,
     loginAsAdmin: handleLoginAdmin,
     logout: handleLogout,
   };

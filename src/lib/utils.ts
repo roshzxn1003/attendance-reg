@@ -33,11 +33,13 @@ export function calculatePercentage(present: number, od: number, total: number):
  */
 export function formatTime12h(timeStr: string): string {
   if (!timeStr) return '';
-  const parts = timeStr.trim().split(':');
+  const trimmed = timeStr.trim();
+  if (/AM|PM/i.test(trimmed)) return trimmed;
+  const parts = trimmed.split(':');
   if (parts.length < 2) return timeStr;
 
   let hours = parseInt(parts[0], 10);
-  const minutes = parts[1].padStart(2, '0');
+  const minutes = parts[1].slice(0, 2).padStart(2, '0');
   if (isNaN(hours)) return timeStr;
 
   const ampm = hours >= 12 ? 'PM' : 'AM';

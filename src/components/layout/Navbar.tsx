@@ -20,7 +20,7 @@ import { StaggeredMenu } from './StaggeredMenu';
 import { cn } from '../../lib/utils';
 
 export const Navbar: React.FC = () => {
-  const { user, isAuthenticated, logout, isStudent, isAdmin } = useAuth();
+  const { user, isAuthenticated, logout, isStudent, isFaculty, isAdmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -39,6 +39,14 @@ export const Navbar: React.FC = () => {
           label: 'My Dashboard',
           ariaLabel: 'My personal attendance dashboard',
           link: '/student-portal',
+        },
+      ]
+    : isFaculty
+    ? [
+        {
+          label: `${user?.defaultSubject || 'Subject'} Register`,
+          ariaLabel: 'Faculty subject attendance register and export portal',
+          link: '/faculty-report',
         },
       ]
     : [
@@ -62,14 +70,14 @@ export const Navbar: React.FC = () => {
           ariaLabel: 'Students roster and reports',
           link: '/students',
         },
-        {
-          label: 'Faculty Reports',
-          ariaLabel: 'Faculty subject-wise attendance register and exports',
-          link: '/faculty-report',
-        },
-        // Admin link strictly restricted to Admin role
+        // Admin links strictly restricted to Admin role
         ...(isAdmin
           ? [
+              {
+                label: 'Faculty Reports',
+                ariaLabel: 'Faculty subject-wise attendance register and exports',
+                link: '/faculty-report',
+              },
               {
                 label: 'Admin Centre',
                 ariaLabel: 'Admin centre — system management',
@@ -108,6 +116,8 @@ export const Navbar: React.FC = () => {
             <div className="text-[11px] font-mono text-slate-500 capitalize">
               {user.role === 'admin'
                 ? 'Administrator'
+                : user.role === 'faculty'
+                ? `Faculty (${user.assignedSubjects?.join(', ') || 'Subject'})`
                 : user.role === 'cr'
                 ? 'Class Representative'
                 : user.student_id}
@@ -151,7 +161,7 @@ export const Navbar: React.FC = () => {
             {/* Logo & Brand */}
             <div className="flex items-center gap-3 shrink-0">
               <NavLink
-                to={isLoginPage ? '/login' : isStudent ? '/student-portal' : '/attendance'}
+                to={isLoginPage ? '/login' : isStudent ? '/student-portal' : isFaculty ? '/faculty-report' : '/attendance'}
                 className="flex items-center gap-2.5 group"
               >
                 <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-blue-700 via-indigo-600 to-blue-800 flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform shrink-0">
@@ -163,7 +173,7 @@ export const Navbar: React.FC = () => {
                       SPIHER
                     </span>
                     <span className="text-[10px] bg-blue-50 text-blue-700 font-extrabold px-1.5 py-0.5 rounded-md border border-blue-200/60">
-                      {isLoginPage ? 'Portal' : isStudent ? 'Student' : isAdmin ? 'Admin' : 'CR Portal'}
+                      {isLoginPage ? 'Portal' : isStudent ? 'Student' : isFaculty ? 'Faculty' : isAdmin ? 'Admin' : 'CR Portal'}
                     </span>
                   </div>
                   <span className="text-[10px] text-slate-400 font-medium hidden sm:inline leading-none">
@@ -190,6 +200,21 @@ export const Navbar: React.FC = () => {
                   >
                     <GraduationCap className="w-3.5 h-3.5" />
                     <span>My Dashboard</span>
+                  </NavLink>
+                ) : isFaculty ? (
+                  <NavLink
+                    to="/faculty-report"
+                    className={({ isActive }) =>
+                      cn(
+                        'flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap',
+                        isActive || location.pathname === '/faculty-report' || location.pathname === '/subject-report'
+                          ? 'bg-amber-600 text-white shadow-xs font-black'
+                          : 'text-amber-900 bg-amber-50/80 hover:bg-amber-100 border border-amber-300 font-bold'
+                      )
+                    }
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>{user?.defaultSubject ? `${user.defaultSubject} Register` : 'Faculty Subject Register'}</span>
                   </NavLink>
                 ) : (
                   <>
@@ -253,37 +278,39 @@ export const Navbar: React.FC = () => {
                       <span>Students</span>
                     </NavLink>
 
-                    <NavLink
-                      to="/faculty-report"
-                      className={({ isActive }) =>
-                        cn(
-                          'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap',
-                          isActive
-                            ? 'bg-blue-600 text-white shadow-xs font-black'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                        )
-                      }
-                    >
-                      <BookOpen className="w-3.5 h-3.5" />
-                      <span>Faculty</span>
-                    </NavLink>
-
-                    {/* Admin link strictly restricted to Admin role */}
+                    {/* Admin and Faculty Reports links strictly restricted to Admin role */}
                     {isAdmin && (
-                      <NavLink
-                        to="/admin"
-                        className={({ isActive }) =>
-                          cn(
-                            'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap',
-                            isActive
-                              ? 'bg-blue-600 text-white shadow-xs font-black'
-                              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                          )
-                        }
-                      >
-                        <Settings className="w-3.5 h-3.5" />
-                        <span>Admin</span>
-                      </NavLink>
+                      <>
+                        <NavLink
+                          to="/faculty-report"
+                          className={({ isActive }) =>
+                            cn(
+                              'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap',
+                              isActive
+                                ? 'bg-blue-600 text-white shadow-xs font-black'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                            )
+                          }
+                        >
+                          <BookOpen className="w-3.5 h-3.5" />
+                          <span>Faculty</span>
+                        </NavLink>
+
+                        <NavLink
+                          to="/admin"
+                          className={({ isActive }) =>
+                            cn(
+                              'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap',
+                              isActive
+                                ? 'bg-blue-600 text-white shadow-xs font-black'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                            )
+                          }
+                        >
+                          <Settings className="w-3.5 h-3.5" />
+                          <span>Admin</span>
+                        </NavLink>
+                      </>
                     )}
                   </>
                 )}
@@ -324,7 +351,13 @@ export const Navbar: React.FC = () => {
                             {user.name}
                           </div>
                           <div className="text-[9px] text-slate-400 uppercase font-mono leading-none">
-                            {user.role === 'admin' ? 'Admin' : user.role === 'cr' ? 'CR' : user.student_id}
+                            {user.role === 'admin'
+                              ? 'Admin'
+                              : user.role === 'faculty'
+                              ? user.defaultSubject || 'Faculty'
+                              : user.role === 'cr'
+                              ? 'CR'
+                              : user.student_id}
                           </div>
                         </div>
                       </div>

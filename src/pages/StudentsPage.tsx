@@ -21,7 +21,7 @@ export const StudentsPage: React.FC = () => {
 
   // Load students for active class
   const { students, loading: studentsLoading } = useStudents(selectedClass.id);
-  const activeStudents = React.useMemo(() => students.filter((s) => s.active), [students]);
+  const activeStudents = React.useMemo(() => students.filter((s) => s.active !== false), [students]);
 
   // Load attendance calculations for active class
   const { cumulativeSummaries, loading: dashLoading } = useAttendanceDashboard(

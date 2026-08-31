@@ -12,6 +12,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { ClassId } from '../types';
 import { MASTER_STUDENTS } from '../data/students';
 import { DEFAULT_ADMIN_PASSWORDS } from './authService';
+import { fetchStudents } from './studentService';
 
 export interface SystemDiagnostics {
   isDatabaseConnected: boolean;
@@ -169,7 +170,10 @@ export async function resetAttendance(classId?: ClassId): Promise<number> {
     if (raw) {
       const list: any[] = JSON.parse(raw);
       if (classId) {
-        const remaining = list.filter((r) => r.class_id && r.class_id !== classId);
+        const remaining = list.filter((r) => {
+          const recClassId = r.class_id || (r.student_id?.startsWith('SPC25CSU6') ? 'AIDS-25' : 'CSE-25');
+          return recClassId !== classId;
+        });
         deletedCount = list.length - remaining.length;
         localStorage.setItem('smart_cr_attendance_records', JSON.stringify(remaining));
       } else {
@@ -184,14 +188,17 @@ export async function resetAttendance(classId?: ClassId): Promise<number> {
   // If Supabase configured, delete from database
   if (isSupabaseConfigured()) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let q = (supabase as any).from('attendance').delete();
       if (classId) {
-        q = q.eq('class_id', classId);
+        const students = await fetchStudents(classId);
+        const sIds = students.map((s) => s.student_id);
+        if (sIds.length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (supabase as any).from('attendance').delete().in('student_id', sIds);
+        }
       } else {
-        q = q.neq('attendance_id', '00000000-0000-0000-0000-000000000000');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).from('attendance').delete().neq('attendance_id', '00000000-0000-0000-0000-000000000000');
       }
-      await q;
     } catch {
       // ignore
     }

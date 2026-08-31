@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Card, CardContent } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
 import { Button } from '../components/common/Button';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { ClassId } from '../types';
 import { ACADEMIC_MONTHS } from '../services/monthlyAttendanceService';
 import {
@@ -26,6 +28,7 @@ import {
   CheckCircle2,
   Clock,
   GraduationCap,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -34,23 +37,57 @@ type RangeMode = 'semester' | 'month' | 'custom';
 
 export const FacultySubjectReportPage: React.FC = () => {
   const { selectedClass, setSelectedClassId } = useApp();
+  const { user, isFaculty } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlSubjectParam = searchParams.get('subject');
 
-  const availableSubjects = useMemo(
-    () => getAvailableSubjectsForClass(selectedClass.id),
-    [selectedClass.id]
-  );
+  // Compute available subjects: if logged in as faculty, strictly filter to their assigned subjects
+  const availableSubjects = useMemo(() => {
+    const list = getAvailableSubjectsForClass(selectedClass.id);
+    if (isFaculty && user?.assignedSubjects && user.assignedSubjects.length > 0) {
+      const allowed = new Set(user.assignedSubjects.map((s) => s.toUpperCase()));
+      const filtered = list.filter((s) => allowed.has(s.shortForm.toUpperCase()));
+      return filtered.length > 0 ? filtered : list;
+    }
+    return list;
+  }, [selectedClass.id, isFaculty, user]);
 
   const [selectedSubjectKey, setSelectedSubjectKey] = useState<string>(() => {
+    if (urlSubjectParam) {
+      const found = availableSubjects.find(
+        (s) => s.shortForm.toUpperCase() === urlSubjectParam.toUpperCase()
+      );
+      if (found) return found.shortForm;
+    }
+    if (isFaculty && user?.defaultSubject) {
+      const found = availableSubjects.find(
+        (s) => s.shortForm.toUpperCase() === user.defaultSubject!.toUpperCase()
+      );
+      if (found) return found.shortForm;
+    }
     return availableSubjects[0]?.shortForm || 'OS';
   });
 
-  // Keep subject in sync if class changes
+  const handleSelectSubject = useCallback((subjKey: string) => {
+    setSelectedSubjectKey(subjKey);
+    setSearchParams({ subject: subjKey }, { replace: true });
+  }, [setSearchParams]);
+
+  // Sync subject if class changes and current selectedSubjectKey is not in availableSubjects
   useEffect(() => {
-    const list = getAvailableSubjectsForClass(selectedClass.id);
-    if (!list.some((s) => s.shortForm === selectedSubjectKey)) {
-      setSelectedSubjectKey(list[0]?.shortForm || 'OS');
+    if (!availableSubjects.some((s) => s.shortForm === selectedSubjectKey)) {
+      const fallback =
+        (isFaculty &&
+          user?.defaultSubject &&
+          availableSubjects.find(
+            (s) => s.shortForm.toUpperCase() === user.defaultSubject!.toUpperCase()
+          )?.shortForm) ||
+        availableSubjects[0]?.shortForm ||
+        'OS';
+      setSelectedSubjectKey(fallback);
+      setSearchParams({ subject: fallback }, { replace: true });
     }
-  }, [selectedClass.id, selectedSubjectKey]);
+  }, [availableSubjects, selectedSubjectKey, isFaculty, user, setSearchParams]);
 
   // Date Filters
   const [rangeMode, setRangeMode] = useState<RangeMode>('semester');
@@ -150,11 +187,53 @@ export const FacultySubjectReportPage: React.FC = () => {
       {/* ── Page Header ── */}
       <div className="print:hidden">
         <PageHeader
-          title="Faculty Subject Attendance Portal"
-          subtitle="Generate, review, and export official period-by-period attendance registers, eligibility percentages, and session logs for your assigned subjects."
-          badge="Faculty & CR Tools"
+          title={
+            isFaculty
+              ? `${activeSubject?.name || 'Subject'} Attendance Register`
+              : 'Faculty Subject Attendance Portal'
+          }
+          subtitle={
+            isFaculty
+              ? `Official period attendance registers, eligibility percentages, and session logs for ${user?.facultyName || user?.name || 'Subject Faculty'}.`
+              : 'Generate, review, and export official period-by-period attendance registers, eligibility percentages, and session logs for your assigned subjects.'
+          }
+          badge={
+            isFaculty
+              ? `Faculty: ${user?.assignedSubjects?.join(', ') || activeSubject?.shortForm}`
+              : 'Faculty & CR Tools'
+          }
         />
       </div>
+
+      {/* ── Faculty In-Charge Welcome Card (shown only when logged in as Faculty) ── */}
+      {isFaculty && (
+        <Card className="border-amber-200 bg-gradient-to-r from-amber-50/90 via-orange-50/60 to-amber-50/40 shadow-xs print:hidden">
+          <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-amber-600 text-white flex items-center justify-center font-black text-base shadow-sm shrink-0">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-sm font-black text-amber-950">
+                    Welcome, {user?.facultyName || user?.name}
+                  </h2>
+                  <Badge variant="warning" size="sm" className="font-bold">
+                    Faculty Session Active
+                  </Badge>
+                </div>
+                <p className="text-xs text-amber-900 mt-0.5">
+                  Assigned Subject(s): <strong>{user?.assignedSubjects?.join(', ') || activeSubject?.shortForm}</strong> • Restricted to your domain.
+                </p>
+              </div>
+            </div>
+
+            <span className="text-[11px] font-mono text-amber-800 bg-white/80 border border-amber-200 px-2.5 py-1 rounded-xl font-bold self-start sm:self-auto">
+              Room 245 • Sem III
+            </span>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Subject & Class Filter Card ── */}
       <Card className="border-slate-200 bg-white shadow-xs print:hidden">
@@ -173,7 +252,7 @@ export const FacultySubjectReportPage: React.FC = () => {
                     <button
                       key={subj.shortForm}
                       type="button"
-                      onClick={() => setSelectedSubjectKey(subj.shortForm)}
+                      onClick={() => handleSelectSubject(subj.shortForm)}
                       className={cn(
                         'px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border',
                         isSelected
