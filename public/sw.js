@@ -3,7 +3,7 @@
  * Provides 100% offline functionality, asset caching, and background sync.
  */
 
-const CACHE_NAME = 'spiher-attendance-v1.1';
+const CACHE_NAME = 'spiher-attendance-v1.2';
 
 const PRECACHE_ASSETS = [
   '/',
