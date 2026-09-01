@@ -7,6 +7,12 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { AttendanceStatus, ClassId, PeriodNumber } from '../types';
 import { getSubjectForSlot, PERIOD_TIMINGS } from '../data/timetable';
 import { getAllDayCycleLogs, DayCycleEntry } from './dayCycleService';
+import {
+  AttendanceItem,
+  getLocalAttendance,
+  saveLocalAttendance,
+  mergeAttendanceRecords,
+} from './attendanceService';
 
 export interface StudentHistoryRecord {
   attendance_id: string;
@@ -28,8 +34,6 @@ export interface StudentProfileStats {
   percentage: number;
 }
 
-const LOCAL_STORAGE_ATTENDANCE_KEY = 'smart_cr_attendance_records';
-
 /**
  * Fetch all attendance history for a single student, resolved with Day Order, Subject, and Timings.
  */
@@ -38,17 +42,8 @@ export async function fetchStudentHistory(
   classId: ClassId
 ): Promise<{ history: StudentHistoryRecord[]; stats: StudentProfileStats }> {
   // Fetch raw student records and day cycle logs concurrently
-  const [recordsResult, dayLogs] = await Promise.all([
-    (async () => {
-      let records: Array<{
-        attendance_id?: string;
-        student_id: string;
-        date: string;
-        period_number: PeriodNumber;
-        status: AttendanceStatus;
-        marked_at?: string;
-      }> = [];
-
+  const [remoteRecordsResult, dayLogs] = await Promise.all([
+    (async (): Promise<AttendanceItem[]> => {
       if (isSupabaseConfigured()) {
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -61,32 +56,29 @@ export async function fetchStudentHistory(
             .order('period_number', { ascending: true });
 
           if (!error && data) {
-            records = data;
+            return data as AttendanceItem[];
           }
         } catch {
           // fallback below
         }
       }
-
-      // Fallback to local storage if empty
-      if (records.length === 0) {
-        try {
-          const raw = localStorage.getItem(LOCAL_STORAGE_ATTENDANCE_KEY);
-          if (raw) {
-            const parsed = JSON.parse(raw) as typeof records;
-            records = parsed.filter((r) => r.student_id === studentId);
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      return records;
+      return [];
     })(),
     getAllDayCycleLogs(classId),
   ]);
 
-  const rawRecords = recordsResult;
+  const remoteRecords = remoteRecordsResult;
+  const local = getLocalAttendance();
+  const localStudentRecords = local.filter((r) => r.student_id === studentId);
+
+  // Merge remote & local records so nothing is lost
+  const rawRecords = mergeAttendanceRecords(remoteRecords, localStudentRecords);
+
+  // Update local storage if remote records loaded
+  if (remoteRecords.length > 0) {
+    const updatedLocal = mergeAttendanceRecords(remoteRecords, local);
+    saveLocalAttendance(updatedLocal);
+  }
 
   // Build Map for O(1) day cycle lookups
   const dayLogMap = new Map<string, DayCycleEntry>();
@@ -100,7 +92,7 @@ export async function fetchStudentHistory(
     return a.period_number - b.period_number;
   });
 
-  // Resolve day numbers, subjects, and timings in memory (0ms)
+  // Resolve day numbers, subjects, and timings in memory
   const history: StudentHistoryRecord[] = [];
   let presentHours = 0;
   let absentHours = 0;

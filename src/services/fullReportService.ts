@@ -9,7 +9,12 @@ import { AttendanceStatus, ClassId, PeriodNumber, StudentAttendanceSummary } fro
 import { getSubjectForSlot, PERIOD_TIMINGS } from '../data/timetable';
 import { getAllDayCycleLogs, DayCycleEntry } from './dayCycleService';
 import { fetchStudents, Student } from './studentService';
-import { AttendanceItem } from './attendanceService';
+import {
+  AttendanceItem,
+  getLocalAttendance,
+  saveLocalAttendance,
+  mergeAttendanceRecords,
+} from './attendanceService';
 import { getMonthDateRange } from './monthlyAttendanceService';
 
 export interface FullReportRecord {
@@ -46,8 +51,6 @@ export interface ReportOverviewStats {
   uniqueDatesCount: number;
 }
 
-const LOCAL_STORAGE_ATTENDANCE_KEY = 'smart_cr_attendance_records';
-
 /**
  * Fetch and construct the complete attendance report dataset for a class
  */
@@ -76,7 +79,8 @@ export async function generateFullAttendanceReport(
   }
 
   // 3. Fetch raw attendance records
-  let rawAttendance: AttendanceItem[] = [];
+  let remoteAttendance: AttendanceItem[] = [];
+  let remoteLoaded = false;
 
   if (isSupabaseConfigured() && studentIds.length > 0) {
     try {
@@ -118,7 +122,7 @@ export async function generateFullAttendanceReport(
           break;
         }
 
-        rawAttendance = rawAttendance.concat(data as AttendanceItem[]);
+        remoteAttendance = remoteAttendance.concat(data as AttendanceItem[]);
 
         if (data.length < CHUNK_SIZE) {
           hasMore = false;
@@ -126,32 +130,34 @@ export async function generateFullAttendanceReport(
           from += CHUNK_SIZE;
         }
       }
+
+      if (remoteAttendance.length > 0) {
+        remoteLoaded = true;
+      }
     } catch {
       // fallback below
     }
   }
 
-  if (rawAttendance.length === 0) {
-    try {
-      const raw = localStorage.getItem(LOCAL_STORAGE_ATTENDANCE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as AttendanceItem[];
-        const idSet = new Set(studentIds);
-        rawAttendance = parsed.filter((r) => {
-          if (!idSet.has(r.student_id)) return false;
-          if (filters.month && filters.month !== 'all') {
-            const { startDate, endDate } = getMonthDateRange(filters.month);
-            if (r.date < startDate || r.date > endDate) return false;
-          }
-          if (filters.startDate && r.date < filters.startDate) return false;
-          if (filters.endDate && r.date > filters.endDate) return false;
-          if (filters.status && filters.status !== 'all' && r.status !== filters.status) return false;
-          return true;
-        });
-      }
-    } catch {
-      // ignore
+  const local = getLocalAttendance();
+  const idSet = new Set(studentIds);
+  const localFiltered = local.filter((r) => {
+    if (!idSet.has(r.student_id)) return false;
+    if (filters.month && filters.month !== 'all') {
+      const { startDate, endDate } = getMonthDateRange(filters.month);
+      if (r.date < startDate || r.date > endDate) return false;
     }
+    if (filters.startDate && r.date < filters.startDate) return false;
+    if (filters.endDate && r.date > filters.endDate) return false;
+    if (filters.status && filters.status !== 'all' && r.status !== filters.status) return false;
+    return true;
+  });
+
+  const rawAttendance = mergeAttendanceRecords(remoteAttendance, localFiltered);
+
+  if (remoteLoaded && remoteAttendance.length > 0) {
+    const updatedLocal = mergeAttendanceRecords(remoteAttendance, local);
+    saveLocalAttendance(updatedLocal);
   }
 
   // 4. Resolve full joined details

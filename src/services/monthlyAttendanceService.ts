@@ -7,7 +7,13 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { ClassId, StudentAttendanceSummary } from '../types';
 import { Student } from './studentService';
-import { AttendanceItem, calculateStudentSummaries } from './attendanceService';
+import {
+  AttendanceItem,
+  calculateStudentSummaries,
+  getLocalAttendance,
+  saveLocalAttendance,
+  mergeAttendanceRecords,
+} from './attendanceService';
 
 export interface MonthlyClassOverview {
   totalStudents: number;
@@ -46,8 +52,6 @@ export const MULTI_MONTH_PRESETS = [
   { id: 'full-academic-year', label: 'Full Academic Year (Jun 2026 – May 2027)', start: '2026-06-01', end: '2027-05-31' },
 ];
 
-const LOCAL_STORAGE_ATTENDANCE_KEY = 'smart_cr_attendance_records';
-
 /**
  * Fetch all attendance records for a specific class within a custom date range (YYYY-MM-DD to YYYY-MM-DD).
  */
@@ -59,12 +63,14 @@ export async function fetchDateRangeClassAttendance(
 ): Promise<AttendanceItem[]> {
   if (studentIds.length === 0) return [];
 
+  let remoteRecords: AttendanceItem[] = [];
+  let remoteLoaded = false;
+
   if (isSupabaseConfigured()) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any;
       const CHUNK_SIZE = 1000;
-      let allRecords: AttendanceItem[] = [];
       let from = 0;
       let hasMore = true;
 
@@ -83,7 +89,7 @@ export async function fetchDateRangeClassAttendance(
           break;
         }
 
-        allRecords = allRecords.concat(data as AttendanceItem[]);
+        remoteRecords = remoteRecords.concat(data as AttendanceItem[]);
 
         if (data.length < CHUNK_SIZE) {
           hasMore = false;
@@ -92,29 +98,29 @@ export async function fetchDateRangeClassAttendance(
         }
       }
 
-      if (allRecords.length > 0) {
-        return allRecords;
+      if (remoteRecords.length > 0) {
+        remoteLoaded = true;
       }
     } catch {
       // fallback below
     }
   }
 
-  // Local storage fallback
-  try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_ATTENDANCE_KEY);
-    if (raw) {
-      const allRecords = JSON.parse(raw) as AttendanceItem[];
-      const idSet = new Set(studentIds);
-      return allRecords.filter(
-        (r) => idSet.has(r.student_id) && r.date >= startDate && r.date <= endDate
-      );
-    }
-  } catch {
-    // ignore
+  // Local storage records
+  const local = getLocalAttendance();
+  const idSet = new Set(studentIds);
+  const localMatched = local.filter(
+    (r) => idSet.has(r.student_id) && r.date >= startDate && r.date <= endDate
+  );
+
+  const merged = mergeAttendanceRecords(remoteRecords, localMatched);
+
+  if (remoteLoaded && remoteRecords.length > 0) {
+    const updatedLocal = mergeAttendanceRecords(remoteRecords, local);
+    saveLocalAttendance(updatedLocal);
   }
 
-  return [];
+  return merged;
 }
 
 /**

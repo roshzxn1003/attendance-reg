@@ -197,7 +197,7 @@ export async function resetAttendance(classId?: ClassId): Promise<number> {
         }
       } else {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any).from('attendance').delete().neq('attendance_id', '00000000-0000-0000-0000-000000000000');
+        await (supabase as any).from('attendance').delete().gte('date', '1970-01-01');
       }
     } catch {
       // ignore
@@ -235,7 +235,7 @@ export async function resetDayCycle(classId?: ClassId): Promise<number> {
       if (classId) {
         q = q.eq('class_id', classId);
       } else {
-        q = q.neq('id', '00000000-0000-0000-0000-000000000000');
+        q = q.in('class_id', ['CSE-25', 'AIDS-25']);
       }
       await q;
     } catch {
@@ -442,9 +442,9 @@ export async function executeFullFactoryReset(): Promise<{ success: boolean; mes
   if (isSupabaseConfigured()) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from('attendance').delete().neq('attendance_id', '00000000-0000-0000-0000-000000000000');
+      await (supabase as any).from('attendance').delete().gte('date', '1970-01-01');
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from('day_cycle_log').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await (supabase as any).from('day_cycle_log').delete().in('class_id', ['CSE-25', 'AIDS-25']);
     } catch {
       // ignore
     }

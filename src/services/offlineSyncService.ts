@@ -73,12 +73,14 @@ export async function syncOfflineQueueNow(): Promise<{
   success: boolean;
   error?: string;
 }> {
-  if (!isSupabaseConfigured() || !navigator.onLine) {
+  if (!isSupabaseConfigured() || (typeof navigator !== 'undefined' && !navigator.onLine)) {
     return { syncedCount: 0, success: false, error: 'Offline or Supabase not connected' };
   }
 
   const queue = getOfflineQueue();
   if (queue.length === 0) {
+    currentStatus.pendingCount = 0;
+    notifyListeners();
     return { syncedCount: 0, success: true };
   }
 
@@ -93,20 +95,29 @@ export async function syncOfflineQueueNow(): Promise<{
 
     for (let i = 0; i < queue.length; i += CHUNK_SIZE) {
       const chunk = queue.slice(i, i + CHUNK_SIZE);
+      const sanitizedChunk = chunk.map((r) => ({
+        student_id: r.student_id,
+        date: r.date,
+        period_number: r.period_number,
+        status: r.status,
+        marked_at: r.marked_at || new Date().toISOString(),
+      }));
+
       const { error } = await sb
         .from('attendance')
-        .upsert(chunk, { onConflict: 'student_id,date,period_number' });
+        .upsert(sanitizedChunk, { onConflict: 'student_id,date,period_number' });
 
       if (error) {
         throw new Error(error.message);
       }
-      syncedCount += chunk.length;
+      syncedCount += sanitizedChunk.length;
     }
 
     // Clear queue on complete success
     saveOfflineQueue([]);
     currentStatus.lastSyncedAt = new Date().toLocaleTimeString();
     currentStatus.isSyncing = false;
+    currentStatus.pendingCount = 0;
     notifyListeners();
 
     return { syncedCount, success: true };
@@ -118,13 +129,22 @@ export async function syncOfflineQueueNow(): Promise<{
 }
 
 /**
- * Initialize offline network listeners and auto-sync on reconnect
+ * Initialize offline network listeners and auto-sync on start and reconnect
  */
 export function initOfflineSyncEngine(): void {
   if (typeof window === 'undefined') return;
 
   const queue = getOfflineQueue();
   currentStatus.pendingCount = queue.length;
+  currentStatus.isOnline = navigator.onLine;
+  notifyListeners();
+
+  // If online on startup and has pending records, trigger sync immediately
+  if (navigator.onLine && queue.length > 0) {
+    setTimeout(() => {
+      syncOfflineQueueNow();
+    }, 1000);
+  }
 
   window.addEventListener('online', () => {
     currentStatus.isOnline = true;
@@ -132,7 +152,7 @@ export function initOfflineSyncEngine(): void {
     // Auto-sync after reconnect
     setTimeout(() => {
       syncOfflineQueueNow();
-    }, 1500);
+    }, 1200);
   });
 
   window.addEventListener('offline', () => {

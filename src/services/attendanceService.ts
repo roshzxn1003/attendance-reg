@@ -20,6 +20,14 @@ export interface AttendanceItem {
   marked_at?: string;
 }
 
+export interface DbAttendanceRecord {
+  student_id: string;
+  date: string;
+  period_number: PeriodNumber;
+  status: AttendanceStatus;
+  marked_at: string;
+}
+
 export interface PeriodAttendanceStats {
   total: number;
   present: number;
@@ -42,7 +50,7 @@ export interface DailyAttendanceOverview {
 
 const LOCAL_STORAGE_ATTENDANCE_KEY = 'smart_cr_attendance_records';
 
-function getLocalAttendance(): AttendanceItem[] {
+export function getLocalAttendance(): AttendanceItem[] {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_ATTENDANCE_KEY);
     if (raw) return JSON.parse(raw);
@@ -52,12 +60,95 @@ function getLocalAttendance(): AttendanceItem[] {
   return [];
 }
 
-function saveLocalAttendance(records: AttendanceItem[]) {
+export function saveLocalAttendance(records: AttendanceItem[]): void {
   try {
     localStorage.setItem(LOCAL_STORAGE_ATTENDANCE_KEY, JSON.stringify(records));
   } catch {
     // ignore
   }
+}
+
+/**
+ * Sanitize an AttendanceItem into a clean payload matching the PostgreSQL 'attendance' table schema.
+ * Note: 'class_id' and non-UUID 'attendance_id' are stripped as they do not exist in the database table.
+ */
+export function sanitizeAttendanceForDb(record: AttendanceItem): DbAttendanceRecord {
+  return {
+    student_id: record.student_id,
+    date: record.date,
+    period_number: record.period_number,
+    status: record.status,
+    marked_at: record.marked_at || new Date().toISOString(),
+  };
+}
+
+/**
+ * Robust helper to batch-upsert attendance records to Supabase Cloud in chunks of 500.
+ */
+export async function upsertAttendanceToSupabase(
+  records: AttendanceItem[]
+): Promise<{ success: boolean; count: number; error?: string }> {
+  if (!isSupabaseConfigured() || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+    return { success: false, count: 0, error: 'Offline or Supabase not connected' };
+  }
+
+  if (records.length === 0) {
+    return { success: true, count: 0 };
+  }
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    const sanitized = records.map(sanitizeAttendanceForDb);
+    const CHUNK_SIZE = 500;
+    let count = 0;
+
+    for (let i = 0; i < sanitized.length; i += CHUNK_SIZE) {
+      const chunk = sanitized.slice(i, i + CHUNK_SIZE);
+      const { error } = await sb
+        .from('attendance')
+        .upsert(chunk, { onConflict: 'student_id,date,period_number' });
+
+      if (error) {
+        return { success: false, count, error: error.message };
+      }
+      count += chunk.length;
+    }
+
+    return { success: true, count };
+  } catch (err) {
+    return { success: false, count: 0, error: String(err) };
+  }
+}
+
+/**
+ * Reconciles remote database records and local cache records seamlessly.
+ */
+export function mergeAttendanceRecords(
+  remoteRecords: AttendanceItem[],
+  localRecords: AttendanceItem[]
+): AttendanceItem[] {
+  const map = new Map<string, AttendanceItem>();
+
+  for (const r of localRecords) {
+    map.set(`${r.student_id}_${r.date}_${r.period_number}`, r);
+  }
+
+  for (const r of remoteRecords) {
+    const key = `${r.student_id}_${r.date}_${r.period_number}`;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, r);
+    } else {
+      const existingTime = existing.marked_at ? new Date(existing.marked_at).getTime() : 0;
+      const remoteTime = r.marked_at ? new Date(r.marked_at).getTime() : 0;
+      if (remoteTime >= existingTime) {
+        map.set(key, { ...existing, ...r });
+      }
+    }
+  }
+
+  return Array.from(map.values());
 }
 
 /**
@@ -70,6 +161,9 @@ export async function fetchPeriodAttendance(
   periodNumber: PeriodNumber,
   studentIds?: string[]
 ): Promise<{ records: AttendanceItem[]; exists: boolean; lastMarkedAt?: string }> {
+  let remoteRecords: AttendanceItem[] = [];
+  let remoteLoaded = false;
+
   if (isSupabaseConfigured()) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -87,34 +181,39 @@ export async function fetchPeriodAttendance(
       const { data, error } = await query;
 
       if (!error && data) {
-        const records = data as AttendanceItem[];
-        if (records.length > 0) {
-          const lastMarkedAt = records[0]?.marked_at;
-          return { records, exists: true, lastMarkedAt };
-        }
-        return { records: [], exists: false };
+        remoteRecords = data as AttendanceItem[];
+        remoteLoaded = true;
       }
     } catch {
       // fallback to local below if network error
     }
   }
 
-  // Local storage fallback
+  // Local storage records
   const local = getLocalAttendance();
-  let matched = local.filter((r) => r.date === date && r.period_number === periodNumber);
+  let localMatched = local.filter((r) => r.date === date && r.period_number === periodNumber);
   if (studentIds && studentIds.length > 0) {
     const idSet = new Set(studentIds);
-    matched = matched.filter((r) => idSet.has(r.student_id));
+    localMatched = localMatched.filter((r) => idSet.has(r.student_id));
   } else if (classId === 'CSE-25') {
-    matched = matched.filter((r) => r.student_id.startsWith('SPC25CSU0'));
+    localMatched = localMatched.filter((r) => r.student_id.startsWith('SPC25CSU0'));
   } else if (classId === 'AIDS-25') {
-    matched = matched.filter((r) => r.student_id.startsWith('SPC25CSU6'));
+    localMatched = localMatched.filter((r) => r.student_id.startsWith('SPC25CSU6'));
+  }
+
+  // Merge remote and local records
+  const merged = mergeAttendanceRecords(remoteRecords, localMatched);
+
+  // If remote records were fetched, update local storage cache
+  if (remoteLoaded && remoteRecords.length > 0) {
+    const updatedLocal = mergeAttendanceRecords(remoteRecords, local);
+    saveLocalAttendance(updatedLocal);
   }
 
   return {
-    records: matched,
-    exists: matched.length > 0,
-    lastMarkedAt: matched[0]?.marked_at,
+    records: merged,
+    exists: merged.length > 0,
+    lastMarkedAt: merged[0]?.marked_at,
   };
 }
 
@@ -126,6 +225,9 @@ export async function fetchDateAttendance(
   date: string,
   studentIds?: string[]
 ): Promise<AttendanceItem[]> {
+  let remoteRecords: AttendanceItem[] = [];
+  let remoteLoaded = false;
+
   if (isSupabaseConfigured()) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -142,7 +244,8 @@ export async function fetchDateAttendance(
       const { data, error } = await query;
 
       if (!error && data) {
-        return data as AttendanceItem[];
+        remoteRecords = data as AttendanceItem[];
+        remoteLoaded = true;
       }
     } catch {
       // fallback below
@@ -150,16 +253,24 @@ export async function fetchDateAttendance(
   }
 
   const local = getLocalAttendance();
-  let matched = local.filter((r) => r.date === date);
+  let localMatched = local.filter((r) => r.date === date);
   if (studentIds && studentIds.length > 0) {
     const idSet = new Set(studentIds);
-    matched = matched.filter((r) => idSet.has(r.student_id));
+    localMatched = localMatched.filter((r) => idSet.has(r.student_id));
   } else if (classId === 'CSE-25') {
-    matched = matched.filter((r) => r.student_id.startsWith('SPC25CSU0'));
+    localMatched = localMatched.filter((r) => r.student_id.startsWith('SPC25CSU0'));
   } else if (classId === 'AIDS-25') {
-    matched = matched.filter((r) => r.student_id.startsWith('SPC25CSU6'));
+    localMatched = localMatched.filter((r) => r.student_id.startsWith('SPC25CSU6'));
   }
-  return matched;
+
+  const merged = mergeAttendanceRecords(remoteRecords, localMatched);
+
+  if (remoteLoaded && remoteRecords.length > 0) {
+    const updatedLocal = mergeAttendanceRecords(remoteRecords, local);
+    saveLocalAttendance(updatedLocal);
+  }
+
+  return merged;
 }
 
 /**
@@ -171,12 +282,14 @@ export async function fetchAllClassAttendance(
 ): Promise<AttendanceItem[]> {
   if (studentIds.length === 0) return [];
 
+  let remoteRecords: AttendanceItem[] = [];
+  let remoteLoaded = false;
+
   if (isSupabaseConfigured()) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = supabase as any;
       const CHUNK_SIZE = 1000;
-      let allRecords: AttendanceItem[] = [];
       let from = 0;
       let hasMore = true;
 
@@ -193,7 +306,7 @@ export async function fetchAllClassAttendance(
           break;
         }
 
-        allRecords = allRecords.concat(data as AttendanceItem[]);
+        remoteRecords = remoteRecords.concat(data as AttendanceItem[]);
 
         if (data.length < CHUNK_SIZE) {
           hasMore = false;
@@ -202,8 +315,8 @@ export async function fetchAllClassAttendance(
         }
       }
 
-      if (allRecords.length > 0) {
-        return allRecords;
+      if (remoteRecords.length > 0) {
+        remoteLoaded = true;
       }
     } catch {
       // fallback below
@@ -212,7 +325,16 @@ export async function fetchAllClassAttendance(
 
   const local = getLocalAttendance();
   const idSet = new Set(studentIds);
-  return local.filter((r) => idSet.has(r.student_id));
+  const localMatched = local.filter((r) => idSet.has(r.student_id));
+
+  const merged = mergeAttendanceRecords(remoteRecords, localMatched);
+
+  if (remoteLoaded && remoteRecords.length > 0) {
+    const updatedLocal = mergeAttendanceRecords(remoteRecords, local);
+    saveLocalAttendance(updatedLocal);
+  }
+
+  return merged;
 }
 
 /**
@@ -297,26 +419,10 @@ export async function saveMultiplePeriodsAttendance(
     }
   }
 
-  let supabaseSuccess = false;
+  // 1. Direct Cloud Upsert (with schema sanitization and chunking)
+  const { success: supabaseSuccess } = await upsertAttendanceToSupabase(payload);
 
-  if (isSupabaseConfigured() && typeof navigator !== 'undefined' && navigator.onLine) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sb = supabase as any;
-
-      const { error } = await sb
-        .from('attendance')
-        .upsert(payload, { onConflict: 'student_id,date,period_number' });
-
-      if (!error) {
-        supabaseSuccess = true;
-      }
-    } catch {
-      // Network failure -> fallback to local storage and sync queue below
-    }
-  }
-
-  // Update local storage
+  // 2. Update local storage cache
   const local = getLocalAttendance();
   const periodSet = new Set(periodNumbers);
   const studentSet = new Set(studentMarks.map((m) => m.student_id));
@@ -327,7 +433,7 @@ export async function saveMultiplePeriodsAttendance(
 
   saveLocalAttendance([...filtered, ...payload]);
 
-  // If not directly synced to Supabase (e.g. offline), queue for background auto-sync
+  // 3. If not directly synced to Supabase (e.g. offline), queue for background auto-sync
   if (!supabaseSuccess) {
     queueForSync(payload);
   }
@@ -351,25 +457,10 @@ export async function saveRawAttendanceBatch(
     marked_at: r.marked_at || now,
   }));
 
-  let supabaseSuccess = false;
+  // 1. Direct Cloud Upsert
+  const { success: supabaseSuccess } = await upsertAttendanceToSupabase(payload);
 
-  if (isSupabaseConfigured() && typeof navigator !== 'undefined' && navigator.onLine) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sb = supabase as any;
-      const { error } = await sb
-        .from('attendance')
-        .upsert(payload, { onConflict: 'student_id,date,period_number' });
-
-      if (!error) {
-        supabaseSuccess = true;
-      }
-    } catch {
-      // Network failure -> fallback to local storage and sync queue below
-    }
-  }
-
-  // Update local storage
+  // 2. Update local storage
   const local = getLocalAttendance();
   const keysToReplace = new Set(payload.map((r) => `${r.student_id}_${r.date}_${r.period_number}`));
   const filtered = local.filter(
@@ -378,6 +469,7 @@ export async function saveRawAttendanceBatch(
 
   saveLocalAttendance([...filtered, ...payload]);
 
+  // 3. If not synced, queue for auto-sync
   if (!supabaseSuccess) {
     queueForSync(payload);
   }
@@ -560,20 +652,10 @@ export async function syncLocalAttendanceToCloud(): Promise<{ syncedCount: numbe
     return { syncedCount: 0 };
   }
 
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = supabase as any;
-    const { error } = await sb
-      .from('attendance')
-      .upsert(local, { onConflict: 'student_id,date,period_number' });
-
-    if (error) {
-      return { syncedCount: 0, error: error.message };
-    }
-
-    return { syncedCount: local.length };
-  } catch (err) {
-    return { syncedCount: 0, error: String(err) };
+  const res = await upsertAttendanceToSupabase(local);
+  if (!res.success) {
+    return { syncedCount: res.count, error: res.error };
   }
-}
 
+  return { syncedCount: res.count };
+}
