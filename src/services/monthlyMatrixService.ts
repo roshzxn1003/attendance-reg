@@ -354,9 +354,9 @@ export function exportMonthlyMatrixExcel(
 
     for (const col of data.dateColumns) {
       if (col.isHoliday) {
-        // Vertical merged holiday block: Top cell gets the label, others are empty
+        // Vertical merged holiday block: Top cell gets the multiline vertical label, others are empty
         if (sIdx === 0) {
-          rowData.push('H  O  L  I  D  A  Y');
+          rowData.push('H\nO\nL\nI\nD\nA\nY');
         } else {
           rowData.push('');
         }
@@ -429,7 +429,7 @@ export function exportMonthlyMatrixExcel(
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws['!merges'] = merges;
 
-  // Configure column widths
+  // Configure column widths (compact to avoid consuming excess horizontal space)
   const colWidths: { wch: number }[] = [
     { wch: 6 },  // S.No
     { wch: 15 }, // Reg No
@@ -439,7 +439,7 @@ export function exportMonthlyMatrixExcel(
   for (const col of data.dateColumns) {
     if (col.isHoliday) {
       for (let p = 1; p <= 7; p++) {
-        colWidths.push({ wch: 5 });
+        colWidths.push({ wch: 3.5 }); // Compact holiday column
       }
     } else {
       for (let p = 1; p <= 7; p++) {
