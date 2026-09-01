@@ -260,7 +260,7 @@ export async function generateMonthlyMatrix(
 
 /**
  * Export Monthly / Multi-Month Matrix to formatted Excel (.xlsx) file.
- * Formats holidays as a single compact column with vertical text ("H\nO\nL\nI\nD\nA\nY")
+ * Formats holidays as a 2-column merged vertical block ("H\nO\nL\nI\nD\nA\nY")
  * with no separate holidays tables.
  */
 export function exportMonthlyMatrixExcel(
@@ -270,7 +270,7 @@ export function exportMonthlyMatrixExcel(
   const rows: (string | number)[][] = [];
   const merges: XLSX.Range[] = [];
 
-  const getColsForDate = (col: MatrixDateColumn) => (col.isHoliday ? 1 : 7);
+  const getColsForDate = (col: MatrixDateColumn) => (col.isHoliday ? 2 : 7);
   const totalDateCols = data.dateColumns.reduce((sum, col) => sum + getColsForDate(col), 0);
   const totalCols = 3 + totalDateCols + 5;
 
@@ -294,10 +294,9 @@ export function exportMonthlyMatrixExcel(
   for (const col of data.dateColumns) {
     const dayLabel = `${col.dayMonthLabel} (${col.dayOfWeek})${col.dayNumber ? ` • DO ${col.dayNumber}` : ''}`;
     headerL1.push(dayLabel);
-    if (!col.isHoliday) {
-      for (let p = 2; p <= 7; p++) {
-        headerL1.push(''); // placeholder for merge
-      }
+    const span = getColsForDate(col);
+    for (let p = 2; p <= span; p++) {
+      headerL1.push(''); // placeholder for merge
     }
   }
   headerL1.push('Working Hours', 'Total Present', 'On Duty (OD)', 'Absent', 'Attendance %');
@@ -315,8 +314,10 @@ export function exportMonthlyMatrixExcel(
   for (let i = 0; i < data.dateColumns.length; i++) {
     const col = data.dateColumns[i];
     if (col.isHoliday) {
-      headerL2.push('HOLIDAY');
-      colStartIdx += 1;
+      headerL2.push('HOLIDAY', '');
+      merges.push({ s: { r: 4, c: colStartIdx }, e: { r: 4, c: colStartIdx + 1 } });
+      merges.push({ s: { r: 5, c: colStartIdx }, e: { r: 5, c: colStartIdx + 1 } });
+      colStartIdx += 2;
     } else {
       merges.push({ s: { r: 4, c: colStartIdx }, e: { r: 4, c: colStartIdx + 6 } });
       for (let p = 1; p <= 7; p++) {
@@ -347,11 +348,11 @@ export function exportMonthlyMatrixExcel(
 
     for (const col of data.dateColumns) {
       if (col.isHoliday) {
-        // Single compact holiday column: Top cell gets vertical text
+        // 2-column holiday block: Top cell gets vertical text
         if (sIdx === 0) {
-          rowData.push('H\nO\nL\nI\nD\nA\nY');
+          rowData.push('H\nO\nL\nI\nD\nA\nY', '');
         } else {
-          rowData.push('');
+          rowData.push('', '');
         }
       } else {
         // Working Day: 7 Period marks
@@ -381,25 +382,30 @@ export function exportMonthlyMatrixExcel(
       if (numStudents > 0) {
         merges.push({
           s: { r: studentStartRow, c: dateColIdx },
-          e: { r: studentStartRow + numStudents - 1, c: dateColIdx },
+          e: { r: studentStartRow + numStudents - 1, c: dateColIdx + 1 },
         });
       }
-      dateColIdx += 1;
+      dateColIdx += 2;
     } else {
       dateColIdx += 7;
     }
   }
 
   // Row: Class Totals / Averages Summary Row
+  const summaryRowIdx = studentStartRow + numStudents;
   const summaryRow: (string | number)[] = ['TOTAL', '', 'CLASS TOTALS / AVERAGE'];
 
+  let sumColIdx = 3;
   for (const col of data.dateColumns) {
     if (col.isHoliday) {
-      summaryRow.push('HOLIDAY');
+      summaryRow.push('HOLIDAY', '');
+      merges.push({ s: { r: summaryRowIdx, c: sumColIdx }, e: { r: summaryRowIdx, c: sumColIdx + 1 } });
+      sumColIdx += 2;
     } else {
       for (let p = 1; p <= 7; p++) {
         summaryRow.push('');
       }
+      sumColIdx += 7;
     }
   }
 
@@ -416,7 +422,7 @@ export function exportMonthlyMatrixExcel(
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws['!merges'] = merges;
 
-  // Configure column widths (compact for holidays to avoid consuming horizontal space)
+  // Configure column widths
   const colWidths: { wch: number }[] = [
     { wch: 6 },  // S.No
     { wch: 15 }, // Reg No
@@ -425,7 +431,7 @@ export function exportMonthlyMatrixExcel(
 
   for (const col of data.dateColumns) {
     if (col.isHoliday) {
-      colWidths.push({ wch: 9 }); // 1 single compact column for holiday
+      colWidths.push({ wch: 6 }, { wch: 6 }); // 2 columns of 6 width each (12 width total)
     } else {
       for (let p = 1; p <= 7; p++) {
         colWidths.push({ wch: 4 });
