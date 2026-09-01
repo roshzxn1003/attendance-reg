@@ -602,7 +602,7 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                     Student Name
                   </th>
 
-                  {/* Date Header Spans (7 Periods each) */}
+                  {/* Date Header Spans (7 Periods for working days, 1 Column for holidays) */}
                   {matrixData.dateColumns.length === 0 ? (
                     <th colSpan={7} className="py-2.5 px-4 text-center text-slate-400">
                       No dates recorded in this range ({activeDateRange.label})
@@ -611,11 +611,11 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                     matrixData.dateColumns.map((col) => (
                       <th
                         key={col.dateStr}
-                        colSpan={7}
+                        colSpan={col.isHoliday ? 1 : 7}
                         className={cn(
                           'py-1.5 px-1 border-r border-slate-300 text-center font-mono transition-colors',
                           col.isHoliday
-                            ? 'bg-rose-100 text-rose-900'
+                            ? 'bg-rose-100 text-rose-900 w-10 min-w-10 max-w-10'
                             : col.hasAttendance
                             ? 'bg-blue-50 text-blue-900'
                             : 'bg-slate-50 text-slate-600'
@@ -685,10 +685,10 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                     col.isHoliday ? (
                       <th
                         key={`${col.dateStr}_holiday_header`}
-                        colSpan={7}
-                        className="py-1 px-1 border-r border-slate-300 bg-rose-100 text-rose-900 text-center font-bold tracking-wider text-[10px]"
+                        colSpan={1}
+                        className="py-1 px-1 border-r border-slate-300 bg-rose-100 text-rose-900 text-center font-bold tracking-wider text-[10px] w-10 min-w-10 max-w-10"
                       >
-                        HOLIDAY
+                        H
                       </th>
                     ) : (
                       <React.Fragment key={`${col.dateStr}_periods`}>
@@ -714,7 +714,7 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                 {filteredStudents.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={3 + matrixData.dateColumns.length * 7 + 5}
+                      colSpan={3 + matrixData.dateColumns.reduce((sum, c) => sum + (c.isHoliday ? 1 : 7), 0) + 5}
                       className="py-12 text-center text-slate-500 text-xs"
                     >
                       No attendance records found for {matrixData.monthLabel}.
@@ -774,10 +774,10 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                           col.isHoliday ? (
                             <td
                               key={`${s.regNo}_${col.dateStr}_holiday`}
-                              colSpan={7}
-                              className="py-1 px-1 border-r border-slate-300 bg-rose-50/30 text-rose-800/80 text-center font-mono font-bold text-[10px] tracking-widest"
+                              colSpan={1}
+                              className="py-1 px-1 border-r border-slate-300 bg-rose-50/40 text-rose-800 text-center font-mono font-bold text-[10px] w-10 min-w-10 max-w-10"
                             >
-                              HOLIDAY
+                              H
                             </td>
                           ) : (
                             <React.Fragment key={`${s.regNo}_${col.dateStr}`}>

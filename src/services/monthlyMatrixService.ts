@@ -260,7 +260,7 @@ export async function generateMonthlyMatrix(
 
 /**
  * Export Monthly / Multi-Month Matrix to formatted Excel (.xlsx) file.
- * Formats holidays as a unified vertical merged column block ("H  O  L  I  D  A  Y")
+ * Formats holidays as a single compact column with vertical text ("H\nO\nL\nI\nD\nA\nY")
  * with no separate holidays tables.
  */
 export function exportMonthlyMatrixExcel(
@@ -270,7 +270,9 @@ export function exportMonthlyMatrixExcel(
   const rows: (string | number)[][] = [];
   const merges: XLSX.Range[] = [];
 
-  const totalCols = 3 + data.dateColumns.length * 7 + 5;
+  const getColsForDate = (col: MatrixDateColumn) => (col.isHoliday ? 1 : 7);
+  const totalDateCols = data.dateColumns.reduce((sum, col) => sum + getColsForDate(col), 0);
+  const totalCols = 3 + totalDateCols + 5;
 
   // Row 0: University Banner
   rows.push(["ST. PETER'S INSTITUTE OF HIGHER EDUCATION AND RESEARCH"]);
@@ -292,8 +294,10 @@ export function exportMonthlyMatrixExcel(
   for (const col of data.dateColumns) {
     const dayLabel = `${col.dayMonthLabel} (${col.dayOfWeek})${col.dayNumber ? ` • DO ${col.dayNumber}` : ''}`;
     headerL1.push(dayLabel);
-    for (let p = 2; p <= 7; p++) {
-      headerL1.push(''); // placeholder for merge
+    if (!col.isHoliday) {
+      for (let p = 2; p <= 7; p++) {
+        headerL1.push(''); // placeholder for merge
+      }
     }
   }
   headerL1.push('Working Hours', 'Total Present', 'On Duty (OD)', 'Absent', 'Attendance %');
@@ -310,27 +314,16 @@ export function exportMonthlyMatrixExcel(
 
   for (let i = 0; i < data.dateColumns.length; i++) {
     const col = data.dateColumns[i];
-    const startC = colStartIdx;
-    const endC = colStartIdx + 6;
-
-    // Merge Level 1 header for this date across its 7 columns
-    merges.push({ s: { r: 4, c: startC }, e: { r: 4, c: endC } });
-
     if (col.isHoliday) {
-      // Level 2 header: Merge 7 columns with "HOLIDAY"
       headerL2.push('HOLIDAY');
-      for (let p = 2; p <= 7; p++) {
-        headerL2.push('');
-      }
-      merges.push({ s: { r: 5, c: startC }, e: { r: 5, c: endC } });
+      colStartIdx += 1;
     } else {
-      // Regular working day: Periods 1 to 7
+      merges.push({ s: { r: 4, c: colStartIdx }, e: { r: 4, c: colStartIdx + 6 } });
       for (let p = 1; p <= 7; p++) {
         headerL2.push(p);
       }
+      colStartIdx += 7;
     }
-
-    colStartIdx += 7;
   }
 
   // Trailing totals column header merges across Row 4 & 5
@@ -354,13 +347,10 @@ export function exportMonthlyMatrixExcel(
 
     for (const col of data.dateColumns) {
       if (col.isHoliday) {
-        // Vertical merged holiday block: Top cell gets the multiline vertical label, others are empty
+        // Single compact holiday column: Top cell gets vertical text
         if (sIdx === 0) {
           rowData.push('H\nO\nL\nI\nD\nA\nY');
         } else {
-          rowData.push('');
-        }
-        for (let p = 2; p <= 7; p++) {
           rowData.push('');
         }
       } else {
@@ -387,33 +377,30 @@ export function exportMonthlyMatrixExcel(
   // Add vertical merges for each holiday date across all student rows
   let dateColIdx = 3;
   for (const col of data.dateColumns) {
-    if (col.isHoliday && numStudents > 0) {
-      merges.push({
-        s: { r: studentStartRow, c: dateColIdx },
-        e: { r: studentStartRow + numStudents - 1, c: dateColIdx + 6 },
-      });
+    if (col.isHoliday) {
+      if (numStudents > 0) {
+        merges.push({
+          s: { r: studentStartRow, c: dateColIdx },
+          e: { r: studentStartRow + numStudents - 1, c: dateColIdx },
+        });
+      }
+      dateColIdx += 1;
+    } else {
+      dateColIdx += 7;
     }
-    dateColIdx += 7;
   }
 
   // Row: Class Totals / Averages Summary Row
-  const summaryRowIdx = studentStartRow + numStudents;
   const summaryRow: (string | number)[] = ['TOTAL', '', 'CLASS TOTALS / AVERAGE'];
 
-  let sumColIdx = 3;
   for (const col of data.dateColumns) {
     if (col.isHoliday) {
       summaryRow.push('HOLIDAY');
-      for (let p = 2; p <= 7; p++) {
-        summaryRow.push('');
-      }
-      merges.push({ s: { r: summaryRowIdx, c: sumColIdx }, e: { r: summaryRowIdx, c: sumColIdx + 6 } });
     } else {
       for (let p = 1; p <= 7; p++) {
         summaryRow.push('');
       }
     }
-    sumColIdx += 7;
   }
 
   summaryRow.push(
@@ -429,7 +416,7 @@ export function exportMonthlyMatrixExcel(
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws['!merges'] = merges;
 
-  // Configure column widths (compact to avoid consuming excess horizontal space)
+  // Configure column widths (compact for holidays to avoid consuming horizontal space)
   const colWidths: { wch: number }[] = [
     { wch: 6 },  // S.No
     { wch: 15 }, // Reg No
@@ -438,9 +425,7 @@ export function exportMonthlyMatrixExcel(
 
   for (const col of data.dateColumns) {
     if (col.isHoliday) {
-      for (let p = 1; p <= 7; p++) {
-        colWidths.push({ wch: 3.5 }); // Compact holiday column
-      }
+      colWidths.push({ wch: 9 }); // 1 single compact column for holiday
     } else {
       for (let p = 1; p <= 7; p++) {
         colWidths.push({ wch: 4 });
