@@ -679,23 +679,33 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                   </th>
                 </tr>
 
-                {/* Level 2 Header: Periods 1 2 3 4 5 6 7 */}
+                {/* Level 2 Header: Periods 1 2 3 4 5 6 7 or HOLIDAY */}
                 <tr className="border-b-2 border-slate-400 bg-slate-100 text-slate-600 text-[10px] font-mono font-extrabold">
-                  {matrixData.dateColumns.map((col) => (
-                    <React.Fragment key={`${col.dateStr}_periods`}>
-                      {[1, 2, 3, 4, 5, 6, 7].map((p) => (
-                        <th
-                          key={`${col.dateStr}_p${p}`}
-                          className={cn(
-                            'py-1 px-1 w-7 min-w-7 max-w-7 border-r border-slate-200',
-                            p === 7 && 'border-r-slate-300'
-                          )}
-                        >
-                          {p}
-                        </th>
-                      ))}
-                    </React.Fragment>
-                  ))}
+                  {matrixData.dateColumns.map((col) =>
+                    col.isHoliday ? (
+                      <th
+                        key={`${col.dateStr}_holiday_header`}
+                        colSpan={7}
+                        className="py-1 px-1 border-r border-slate-300 bg-rose-100 text-rose-900 text-center font-bold tracking-wider text-[10px]"
+                      >
+                        HOLIDAY
+                      </th>
+                    ) : (
+                      <React.Fragment key={`${col.dateStr}_periods`}>
+                        {[1, 2, 3, 4, 5, 6, 7].map((p) => (
+                          <th
+                            key={`${col.dateStr}_p${p}`}
+                            className={cn(
+                              'py-1 px-1 w-7 min-w-7 max-w-7 border-r border-slate-200',
+                              p === 7 && 'border-r-slate-300'
+                            )}
+                          >
+                            {p}
+                          </th>
+                        ))}
+                      </React.Fragment>
+                    )
+                  )}
                 </tr>
               </thead>
 
@@ -760,43 +770,50 @@ export const MonthlyPeriodRegisterGrid: React.FC<MonthlyPeriodRegisterGridProps>
                         </td>
 
                         {/* 4. Periods for Each Date */}
-                        {matrixData.dateColumns.map((col) => (
-                          <React.Fragment key={`${s.regNo}_${col.dateStr}`}>
-                            {[1, 2, 3, 4, 5, 6, 7].map((p) => {
-                              const mark = s.marks[`${col.dateStr}_${p}`];
-                              const isP = mark === 'P';
-                              const isA = mark === 'A';
-                              const isOD = mark === 'OD';
+                        {matrixData.dateColumns.map((col) =>
+                          col.isHoliday ? (
+                            <td
+                              key={`${s.regNo}_${col.dateStr}_holiday`}
+                              colSpan={7}
+                              className="py-1 px-1 border-r border-slate-300 bg-rose-50/30 text-rose-800/80 text-center font-mono font-bold text-[10px] tracking-widest"
+                            >
+                              HOLIDAY
+                            </td>
+                          ) : (
+                            <React.Fragment key={`${s.regNo}_${col.dateStr}`}>
+                              {[1, 2, 3, 4, 5, 6, 7].map((p) => {
+                                const mark = s.marks[`${col.dateStr}_${p}`];
+                                const isP = mark === 'P';
+                                const isA = mark === 'A';
+                                const isOD = mark === 'OD';
 
-                              return (
-                                <td
-                                  key={`${s.regNo}_${col.dateStr}_p${p}`}
-                                  className={cn(
-                                    'py-1 px-0.5 w-7 min-w-7 max-w-7 text-center font-mono font-bold text-[11px] border-r border-slate-100 transition-colors',
-                                    p === 7 && 'border-r-slate-300',
-                                    isP && 'text-emerald-700 bg-emerald-50/40',
-                                    isA && 'text-rose-700 bg-rose-100/70 font-black',
-                                    isOD && 'text-amber-800 bg-amber-100/60 font-black',
-                                    !mark && col.isHoliday && 'text-slate-300 bg-rose-50/20',
-                                    !mark && !col.isHoliday && 'text-slate-300'
-                                  )}
-                                >
-                                  {isP
-                                    ? useTickMark
-                                      ? '✓'
-                                      : 'P'
-                                    : isA
-                                    ? 'A'
-                                    : isOD
-                                    ? 'OD'
-                                    : col.isHoliday
-                                    ? '—'
-                                    : '·'}
-                                </td>
-                              );
-                            })}
-                          </React.Fragment>
-                        ))}
+                                return (
+                                  <td
+                                    key={`${s.regNo}_${col.dateStr}_p${p}`}
+                                    className={cn(
+                                      'py-1 px-0.5 w-7 min-w-7 max-w-7 text-center font-mono font-bold text-[11px] border-r border-slate-100 transition-colors',
+                                      p === 7 && 'border-r-slate-300',
+                                      isP && 'text-emerald-700 bg-emerald-50/40',
+                                      isA && 'text-rose-700 bg-rose-100/70 font-black',
+                                      isOD && 'text-amber-800 bg-amber-100/60 font-black',
+                                      !mark && 'text-slate-300'
+                                    )}
+                                  >
+                                    {isP
+                                      ? useTickMark
+                                        ? '✓'
+                                        : 'P'
+                                      : isA
+                                      ? 'A'
+                                      : isOD
+                                      ? 'OD'
+                                      : '·'}
+                                  </td>
+                                );
+                              })}
+                            </React.Fragment>
+                          )
+                        )}
 
                         {/* ── 5. Sticky Locked Totals on the Right Side ── */}
                         {/* Working Hours */}
