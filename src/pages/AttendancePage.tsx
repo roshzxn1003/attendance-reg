@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '../components/common/Badge';
 import { Button } from '../components/common/Button';
+import { ClassSelector } from '../components/common/ClassSelector';
 import { DayCycleSetupCard } from '../components/daycycle/DayCycleSetupCard';
 import { AttendanceMarkingGrid } from '../components/attendance/AttendanceMarkingGrid';
 import { DailyAttendanceOverviewCard } from '../components/attendance/DailyAttendanceOverviewCard';
@@ -52,7 +53,7 @@ export const AttendancePage: React.FC<AttendancePageProps> = ({ initialView }) =
     if (tabParam && ['marking', 'report', 'summary'].includes(tabParam)) return tabParam;
     return initialView || 'marking';
   });
-  const [reportScope, setReportScope] = useState<'period' | 'fullday'>('period');
+  const [reportScope, setReportScope] = useState<'period' | 'fullday' | 'custom'>('period');
   const [isDayOrderModalOpen, setIsDayOrderModalOpen] = useState(false);
 
   useEffect(() => {
@@ -165,17 +166,17 @@ export const AttendancePage: React.FC<AttendancePageProps> = ({ initialView }) =
     : `${selectedSlots[0]?.timing.split(/\s*[–—-]\s*/)[0] || ''} – ${selectedSlots[selectedSlots.length - 1]?.timing.split(/\s*[–—-]\s*/)[1] || ''}`;
 
   return (
-    <div className="space-y-5 pb-12">
+    <div className="space-y-5 pb-24 sm:pb-12">
       <PageHeader
         title="Attendance Marking & Daily Reports"
         subtitle="Fast, CR-optimized period attendance marking, WhatsApp reports, and period registers for Room 245."
         badge="Daily Flow"
       />
 
-      {/* ── Top Bar: Date Picker & Quick Actions ── */}
+      {/* ── Top Bar: Date Picker, Quick Actions & Pinned Active Class ── */}
       <Card className="bg-white border-slate-200 shadow-xs">
         <CardContent className="p-3.5 sm:p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
             {/* Left: Date + Day Order */}
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-300 shadow-2xs">
@@ -226,7 +227,7 @@ export const AttendancePage: React.FC<AttendancePageProps> = ({ initialView }) =
               )}
             </div>
 
-            {/* Right: Action Buttons */}
+            {/* Right: Actions & Pinned Active Class Switcher */}
             <div className="flex items-center gap-2 flex-wrap">
               <NavLink
                 to="/backlog-entry"
@@ -235,13 +236,9 @@ export const AttendancePage: React.FC<AttendancePageProps> = ({ initialView }) =
                 <Zap className="w-3.5 h-3.5 fill-current" />
                 <span>Backlog Wizard</span>
               </NavLink>
-            </div>
-
-            {/* Class Selector — bottom on mobile, inline on sm+ */}
-            <div className="w-full sm:w-auto order-last sm:order-none flex sm:justify-end">
-              <Badge variant="purple" size="md" className="w-full sm:w-auto justify-center text-center">
-                {selectedClass.id} ({selectedClass.name})
-              </Badge>
+              <div className="flex items-center">
+                <ClassSelector compact />
+              </div>
             </div>
           </div>
         </CardContent>

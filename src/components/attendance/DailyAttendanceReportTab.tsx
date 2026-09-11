@@ -36,8 +36,8 @@ interface DailyAttendanceReportTabProps {
   initialScope?: ReportScope;
 }
 
-type ReportScope = 'fullday' | 'period';
-type ReportFormat = 'standard' | 'compact' | 'complete';
+export type ReportScope = 'fullday' | 'period' | 'custom';
+export type ReportFormat = 'standard' | 'compact' | 'complete';
 
 export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> = ({
   classId,
@@ -46,14 +46,16 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
   dayOrderNumber,
   students,
   dateRecords,
-  todaySummaries,
+  todaySummaries: _todaySummaries,
   dailyOverview,
   selectedPeriod = 1,
   initialScope = 'period',
 }) => {
   const [scope, setScope] = useState<ReportScope>(initialScope);
+  const [customPeriods, setCustomPeriods] = useState<PeriodNumber[]>([1, 2, 3, 4]);
   const [activePeriod, setActivePeriod] = useState<PeriodNumber>(selectedPeriod);
   const [format, setFormat] = useState<ReportFormat>('standard');
+  const [breakdownView, setBreakdownView] = useState<'presentees' | 'absentees'>('presentees');
   const [copied, setCopied] = useState(false);
   const [showPresenteesList, setShowPresenteesList] = useState(false);
   const toast = useToast();
@@ -143,10 +145,29 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
     return map;
   }, [activeStudents, studentPeriodMarks, dayOrderNumber, classId]);
 
-  // Full day detailed student analysis
-  const fullDayDetailedAnalysis = useMemo(() => {
-    const fullAbsentees: { student: Student; totalAbsent: number }[] = [];
-    const partialAbsentees: {
+  // Active evaluated periods for multi-period scopes (fullday or custom)
+  const evaluatedPeriods = useMemo<PeriodNumber[]>(() => {
+    if (scope === 'custom') {
+      return customPeriods.length > 0 ? customPeriods : [1, 2, 3, 4];
+    }
+    // fullday
+    return dailyOverview.completedPeriodNumbers.length > 0
+      ? dailyOverview.completedPeriodNumbers
+      : [1, 2, 3, 4, 5, 6, 7];
+  }, [scope, customPeriods, dailyOverview.completedPeriodNumbers]);
+
+  // Multi-period detailed student analysis (Full Day & Custom Scopes)
+  const multiPeriodAnalysis = useMemo(() => {
+    const fullPresentees: Student[] = [];
+    const partialPresentees: Array<{
+      student: Student;
+      presentPeriods: Array<{ period: PeriodNumber; subject: string }>;
+      odPeriods: Array<{ period: PeriodNumber; subject: string }>;
+      attendedHours: number;
+      totalEvaluated: number;
+    }> = [];
+    const fullAbsentees: Array<{ student: Student; totalAbsent: number }> = [];
+    const partialAbsentees: Array<{
       student: Student;
       absentPeriods: Array<{ period: PeriodNumber; subject: string }>;
       odPeriods: Array<{ period: PeriodNumber; subject: string }>;
@@ -155,26 +176,27 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
       odHours: number;
       totalWorking: number;
       percentage: number;
-    }[] = [];
-    const odStudents: {
+    }> = [];
+    const odStudents: Array<{
       student: Student;
       odPeriods: Array<{ period: PeriodNumber; subject: string }>;
-    }[] = [];
-    const fullPresentees: Student[] = [];
+    }> = [];
 
-    const completedPeriods = dailyOverview.completedPeriodNumbers;
+    const totalEvaluated = evaluatedPeriods.length;
 
     for (const student of activeStudents) {
-      const summary = todaySummaries.find((s) => s.student_id === student.student_id);
       const marksObj = studentPeriodMarks[student.student_id] || {};
 
+      const presentPeriods: Array<{ period: PeriodNumber; subject: string }> = [];
       const absentPeriods: Array<{ period: PeriodNumber; subject: string }> = [];
       const odPeriods: Array<{ period: PeriodNumber; subject: string }> = [];
 
-      for (const p of completedPeriods) {
+      for (const p of evaluatedPeriods) {
         const mark = marksObj[p];
         const subject = dayOrderNumber ? getSubjectForSlot(dayOrderNumber as any, p, classId) : `Period ${p}`;
-        if (mark === 'A') {
+        if (mark === 'P') {
+          presentPeriods.push({ period: p, subject });
+        } else if (mark === 'A') {
           absentPeriods.push({ period: p, subject });
         } else if (mark === 'OD') {
           odPeriods.push({ period: p, subject });
@@ -185,181 +207,348 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
         odStudents.push({ student, odPeriods });
       }
 
-      const totalWorking = summary?.totalWorkingHours || 0;
-      const absentHours = summary?.absentHours || 0;
-      const presentHours = summary?.presentHours || 0;
-      const odHours = summary?.odHours || 0;
-      const pct = summary?.percentage || 0;
+      const attendedCount = presentPeriods.length + odPeriods.length;
+      const absentCount = absentPeriods.length;
 
-      if (totalWorking > 0 && absentHours === totalWorking) {
-        fullAbsentees.push({ student, totalAbsent: absentHours });
-      } else if (absentHours > 0) {
-        partialAbsentees.push({
-          student,
-          absentPeriods,
-          odPeriods,
-          presentHours,
-          absentHours,
-          odHours,
-          totalWorking,
-          percentage: pct,
-        });
-      } else if (presentHours > 0 || odHours > 0) {
+      if (totalEvaluated > 0 && absentCount === totalEvaluated) {
+        fullAbsentees.push({ student, totalAbsent: absentCount });
+      } else if (totalEvaluated > 0 && attendedCount === totalEvaluated) {
         fullPresentees.push(student);
+      } else if (attendedCount > 0 || absentCount > 0) {
+        if (attendedCount > 0) {
+          partialPresentees.push({
+            student,
+            presentPeriods,
+            odPeriods,
+            attendedHours: attendedCount,
+            totalEvaluated,
+          });
+        }
+        if (absentCount > 0) {
+          partialAbsentees.push({
+            student,
+            absentPeriods,
+            odPeriods,
+            presentHours: presentPeriods.length,
+            absentHours: absentCount,
+            odHours: odPeriods.length,
+            totalWorking: totalEvaluated,
+            percentage: Math.round((attendedCount / totalEvaluated) * 100),
+          });
+        }
       }
     }
 
+    // Build unified rosters sorted by Register Number (natural numeric sort)
+    const sortedActiveStudents = [...activeStudents].sort((a, b) =>
+      a.student_id.localeCompare(b.student_id, undefined, { numeric: true })
+    );
+
+    const presenteesRoster: Array<{
+      student: Student;
+      isFull: boolean;
+      presentPeriods: Array<{ period: PeriodNumber; subject: string }>;
+      odPeriods: Array<{ period: PeriodNumber; subject: string }>;
+      attendedCount: number;
+    }> = [];
+
+    const absenteesRoster: Array<{
+      student: Student;
+      isFull: boolean;
+      absentPeriods: Array<{ period: PeriodNumber; subject: string }>;
+      odPeriods: Array<{ period: PeriodNumber; subject: string }>;
+      absentCount: number;
+    }> = [];
+
+    for (const student of sortedActiveStudents) {
+      const isFullPres = fullPresentees.some((s) => s.student_id === student.student_id);
+      const partialPres = partialPresentees.find((p) => p.student.student_id === student.student_id);
+      if (isFullPres) {
+        presenteesRoster.push({
+          student,
+          isFull: true,
+          presentPeriods: evaluatedPeriods.map((p) => ({
+            period: p,
+            subject: dayOrderNumber ? getSubjectForSlot(dayOrderNumber as any, p, classId) : `Period ${p}`,
+          })),
+          odPeriods: [],
+          attendedCount: totalEvaluated,
+        });
+      } else if (partialPres) {
+        presenteesRoster.push({
+          student,
+          isFull: false,
+          presentPeriods: partialPres.presentPeriods,
+          odPeriods: partialPres.odPeriods,
+          attendedCount: partialPres.attendedHours,
+        });
+      }
+
+      const isFullAbs = fullAbsentees.some((a) => a.student.student_id === student.student_id);
+      const partialAbs = partialAbsentees.find((p) => p.student.student_id === student.student_id);
+      if (isFullAbs) {
+        absenteesRoster.push({
+          student,
+          isFull: true,
+          absentPeriods: evaluatedPeriods.map((p) => ({
+            period: p,
+            subject: dayOrderNumber ? getSubjectForSlot(dayOrderNumber as any, p, classId) : `Period ${p}`,
+          })),
+          odPeriods: [],
+          absentCount: totalEvaluated,
+        });
+      } else if (partialAbs) {
+        absenteesRoster.push({
+          student,
+          isFull: false,
+          absentPeriods: partialAbs.absentPeriods,
+          odPeriods: partialAbs.odPeriods,
+          absentCount: partialAbs.absentHours,
+        });
+      }
+    }
+
+    const odRoster = [...odStudents].sort((a, b) =>
+      a.student.student_id.localeCompare(b.student.student_id, undefined, { numeric: true })
+    );
+
     return {
+      fullPresentees,
+      partialPresentees,
       fullAbsentees,
       partialAbsentees,
       odStudents,
-      fullPresentees,
-      completedPeriods,
+      presenteesRoster,
+      absenteesRoster,
+      odRoster,
+      completedPeriods: evaluatedPeriods,
+      evaluatedPeriods,
     };
-  }, [activeStudents, todaySummaries, studentPeriodMarks, dailyOverview, dayOrderNumber, classId]);
+  }, [activeStudents, studentPeriodMarks, evaluatedPeriods, dayOrderNumber, classId]);
+
+  // Backward-compatible alias for existing JSX references
+  const fullDayDetailedAnalysis = multiPeriodAnalysis;
 
   // Formatted Message Text Generator
   const generatedMessageText = useMemo(() => {
     const formattedDate = formatDate(date);
     const dayLabel = dayOrderNumber ? `Day Order ${dayOrderNumber}` : '';
 
-    if (scope === 'fullday') {
-      const { fullAbsentees, partialAbsentees, odStudents, fullPresentees, completedPeriods } =
-        fullDayDetailedAnalysis;
+    if (scope === 'fullday' || scope === 'custom') {
+      const {
+        fullPresentees,
+        partialPresentees,
+        fullAbsentees,
+        partialAbsentees,
+        presenteesRoster,
+        absenteesRoster,
+        odRoster,
+        evaluatedPeriods: periodsList,
+      } = multiPeriodAnalysis;
 
+      const periodsCount = periodsList.length;
+      const totalPresentStudents = fullPresentees.length + partialPresentees.length;
       const totalAbsentStudents = fullAbsentees.length + partialAbsentees.length;
-      const periodsCount = completedPeriods.length;
 
-      // ── FORMAT 1: WHATSAPP STANDARD (Full Day) ──
+      // ── FORMAT 1: WHATSAPP STANDARD (REG NO WISE) ──
       if (format === 'standard') {
         let txt = `*SPIHER Attendance Report*\n`;
         txt += `Class: ${classId} (${classNameTitle})\n`;
         txt += `Date: ${formattedDate}${dayLabel ? ` | ${dayLabel}` : ''}\n`;
-        txt += `Period: Full Day (${periodsCount}/7 Periods Completed)\n\n`;
-
-        // Presentees Section
-        txt += `*Presentees (${fullPresentees.length}/${activeStudents.length}):*\n`;
-        if (fullPresentees.length === 0) {
-          txt += `Nil (No students fully present)\n`;
+        if (scope === 'fullday') {
+          txt += `Period: Full Day (${periodsCount}/7 Periods Completed)\n\n`;
         } else {
-          fullPresentees.forEach((s, idx) => {
-            txt += `${idx + 1}. ${s.name} (${s.student_id})\n`;
+          txt += `Period: Custom (${periodsList.map((p) => `P${p}`).join(', ')} — ${periodsCount} Periods Evaluated)\n\n`;
+        }
+
+        // 1. Presentees Section (Reg No Wise)
+        txt += `*Presentees (${totalPresentStudents}/${activeStudents.length}):*\n`;
+        if (totalPresentStudents === 0) {
+          txt += `Nil (No students present)\n`;
+        } else {
+          let pIdx = 1;
+          presenteesRoster.forEach(({ student, isFull, presentPeriods, odPeriods }) => {
+            if (isFull) {
+              txt += `${pIdx++}. ${student.student_id} - ${student.name}\n`;
+            } else {
+              const attendedList = [
+                ...presentPeriods.map((pp) => pp.subject ? `P${pp.period} (${pp.subject})` : `P${pp.period}`),
+                ...odPeriods.map((op) => op.subject ? `P${op.period} [OD] (${op.subject})` : `P${op.period} [OD]`),
+              ];
+              const periodsText = attendedList.length > 0 ? attendedList.join(', ') : 'None';
+              txt += `${pIdx++}. ${student.student_id} - ${student.name} - Present in: ${periodsText}\n`;
+            }
           });
         }
         txt += `\n`;
 
-        // Absentees Section with who are all absent in which period
+        // 2. Absentees Section (Reg No Wise)
         txt += `*Absentees (${totalAbsentStudents}):*\n`;
         if (totalAbsentStudents === 0) {
-          txt += `Nil (All students present for all periods)\n`;
+          txt += `Nil (All students present)\n`;
         } else {
           let aIdx = 1;
-          fullAbsentees.forEach(({ student }) => {
-            txt += `${aIdx++}. ${student.name} (${student.student_id}) - Full Day\n`;
-          });
-          partialAbsentees.forEach(({ student, absentPeriods }) => {
-            const periodsText = absentPeriods.map((ap) => ap.subject ? `P${ap.period} (${ap.subject})` : `P${ap.period}`).join(', ');
-            txt += `${aIdx++}. ${student.name} (${student.student_id}) - ${periodsText}\n`;
+          absenteesRoster.forEach(({ student, isFull, absentPeriods }) => {
+            if (isFull) {
+              txt += `${aIdx++}. ${student.student_id} - ${student.name} - Full Absent\n`;
+            } else {
+              const periodsText = absentPeriods.map((ap) => ap.subject ? `P${ap.period} (${ap.subject})` : `P${ap.period}`).join(', ');
+              txt += `${aIdx++}. ${student.student_id} - ${student.name} - Absent in: ${periodsText}\n`;
+            }
           });
         }
         txt += `\n`;
 
-        // OD Section (if any)
-        if (odStudents.length > 0) {
-          txt += `*On Duty (${odStudents.length}):*\n`;
-          odStudents.forEach(({ student, odPeriods }, idx) => {
+        // 3. OD Section (if any, Reg No Wise)
+        if (odRoster.length > 0) {
+          txt += `*On Duty (${odRoster.length}):*\n`;
+          odRoster.forEach(({ student, odPeriods }, idx) => {
             const odText = odPeriods.map((op) => op.subject ? `P${op.period} (${op.subject})` : `P${op.period}`).join(', ');
-            txt += `${idx + 1}. ${student.name} (${student.student_id}) - ${odText}\n`;
+            txt += `${idx + 1}. ${student.student_id} - ${student.name} - ${odText}\n`;
           });
           txt += `\n`;
         }
 
-        txt += `*Summary:* Total Present: *${fullPresentees.length}/${activeStudents.length}* | Total Absent: *${totalAbsentStudents}* | Attendance: *${dailyOverview.attendancePercentage.toFixed(1)}%*`;
+        // 4. Summary Line
+        txt += `*Summary:* Total Present: *${totalPresentStudents}/${activeStudents.length}* | Full: *${fullPresentees.length}* | Partial: *${partialPresentees.length}* | Full Absent: *${fullAbsentees.length}* | Attendance: *${dailyOverview.attendancePercentage.toFixed(1)}%*\n\n`;
+
+        // 5. Period-wise Attendance Overview (Moved to bottom of the summary)
+        txt += `*Period-wise Attendance Overview:*\n`;
+        periodsList.forEach((p) => {
+          const pd = periodAttendanceDetails[p];
+          if (pd) {
+            txt += `• P${p} (${pd.subject}): ${pd.presentCount + pd.odCount}/${activeStudents.length} Present (${pd.percentage}%)\n`;
+          }
+        });
+
         return txt;
       }
 
-      // ── FORMAT 2: COMPACT / ABSENTEES ONLY ──
+      // ── FORMAT 2: COMPACT / SHORT (REG NO WISE) ──
       if (format === 'compact') {
         let txt = `*SPIHER — ${classId} | ${formattedDate}*\n`;
-        txt += `*Full Day Summary* (${periodsCount}/7 Periods)\n\n`;
+        txt += scope === 'fullday'
+          ? `*Full Day Summary* (${periodsCount}/7 Periods)\n\n`
+          : `*Custom Periods* (${periodsList.map((p) => `P${p}`).join(',')})\n\n`;
+
+        txt += `*Presentees (${totalPresentStudents}/${activeStudents.length}):*\n`;
+        if (totalPresentStudents === 0) {
+          txt += `Nil (No students present)\n`;
+        } else {
+          let pIdx = 1;
+          presenteesRoster.forEach(({ student, isFull, presentPeriods, odPeriods }) => {
+            if (isFull) {
+              txt += `${pIdx++}. ${student.student_id} - ${student.name}\n`;
+            } else {
+              const attendedList = [
+                ...presentPeriods.map((p) => `P${p.period}`),
+                ...odPeriods.map((p) => `P${p.period} [OD]`),
+              ];
+              const pStr = attendedList.length > 0 ? attendedList.join(',') : 'None';
+              txt += `${pIdx++}. ${student.student_id} - ${student.name} - ${pStr}\n`;
+            }
+          });
+        }
+        txt += `\n`;
 
         txt += `*Absentees (${totalAbsentStudents}):*\n`;
         if (totalAbsentStudents === 0) {
           txt += `All Present (Nil Absentees)\n`;
         } else {
           let aIdx = 1;
-          fullAbsentees.forEach(({ student }) => {
-            txt += `${aIdx++}. ${student.name} (${student.student_id}) - Full Day\n`;
-          });
-          partialAbsentees.forEach(({ student, absentPeriods }) => {
-            const periodsText = absentPeriods.map((ap) => `P${ap.period}`).join(', ');
-            txt += `${aIdx++}. ${student.name} (${student.student_id}) - ${periodsText}\n`;
+          absenteesRoster.forEach(({ student, isFull, absentPeriods }) => {
+            if (isFull) {
+              txt += `${aIdx++}. ${student.student_id} - ${student.name} - Full\n`;
+            } else {
+              const periodsText = absentPeriods.map((ap) => `P${ap.period}`).join(', ');
+              txt += `${aIdx++}. ${student.student_id} - ${student.name} - ${periodsText}\n`;
+            }
           });
         }
 
-        if (odStudents.length > 0) {
-          txt += `\n*OD (${odStudents.length}):* ${odStudents.map((o) => `${o.student.name} (P${o.odPeriods.map((x) => x.period).join(',')})`).join(', ')}\n`;
+        if (odRoster.length > 0) {
+          txt += `\n*OD (${odRoster.length}):* ${odRoster.map((o) => `${o.student.student_id} - ${o.student.name} (P${o.odPeriods.map((x) => x.period).join(',')})`).join(', ')}\n`;
         }
 
-        txt += `\n*Present: ${fullPresentees.length}/${activeStudents.length}* | *${dailyOverview.attendancePercentage.toFixed(1)}%*`;
+        txt += `\n*Summary:* Present: *${totalPresentStudents}/${activeStudents.length}* (${dailyOverview.attendancePercentage.toFixed(1)}%) | Absent: *${totalAbsentStudents}*\n`;
+
+        const periodCounts = periodsList
+          .map((p) => {
+            const pd = periodAttendanceDetails[p];
+            return `P${p}: ${pd ? pd.presentCount + pd.odCount : 0}/${activeStudents.length}`;
+          })
+          .join(' | ');
+        txt += `*Periods:* ${periodCounts}\n`;
+
         return txt;
       }
 
-
-      // ── FORMAT 3: COMPLETE AUDIT DOCUMENT ──
+      // ── FORMAT 3: COMPLETE AUDIT DOCUMENT (REG NO WISE) ──
       let txt = `=====================================================\n`;
       txt += `ST. PETER'S INSTITUTE OF HIGHER EDUCATION & RESEARCH\n`;
       txt += `DAILY CLASS ATTENDANCE REGISTER & AUDIT REPORT\n`;
       txt += `=====================================================\n`;
       txt += `Class                 : ${classId} - ${classNameTitle}\n`;
       txt += `Date                  : ${formattedDate} (${dayLabel})\n`;
+      txt += `Scope                 : ${scope === 'fullday' ? 'Full Day Summary' : `Custom Periods (${periodsList.map((p) => `P${p}`).join(', ')})`}\n`;
       txt += `Total Enrolled        : ${activeStudents.length} Students\n`;
-      txt += `Periods Completed     : ${periodsCount} / 7 Periods\n`;
-      txt += `Total Student-Hours   : ${dailyOverview.totalStudentPeriods} hrs\n`;
-      txt += `Total Present-Hours   : ${dailyOverview.presentCount} hrs\n`;
-      txt += `Total OD-Hours        : ${dailyOverview.odCount} hrs\n`;
-      txt += `Total Absent-Hours    : ${dailyOverview.absentCount} hrs\n`;
+      txt += `Periods Evaluated     : ${periodsCount} Periods\n`;
+      txt += `Total Present Students: ${totalPresentStudents} (Full: ${fullPresentees.length}, Partial: ${partialPresentees.length})\n`;
+      txt += `Total Absent Students : ${totalAbsentStudents} (Full: ${fullAbsentees.length}, Partial: ${partialAbsentees.length})\n`;
       txt += `Day Attendance Rate   : ${dailyOverview.attendancePercentage.toFixed(1)}%\n`;
       txt += `-----------------------------------------------------\n\n`;
 
-      txt += `--- FULL DAY ABSENTEES (${fullAbsentees.length}) ---\n`;
-      if (fullAbsentees.length === 0) {
+      txt += `--- PRESENTEES ROSTER [REG NO WISE] (${totalPresentStudents}/${activeStudents.length}) ---\n`;
+      if (totalPresentStudents === 0) {
         txt += `None\n`;
       } else {
-        fullAbsentees.forEach(({ student }, idx) => {
-          txt += `${String(idx + 1).padStart(2, ' ')}. [${student.student_id}] ${student.name} (Absent for all ${periodsCount} periods)\n`;
+        presenteesRoster.forEach(({ student, isFull, presentPeriods, odPeriods }, idx) => {
+          if (isFull) {
+            txt += `${String(idx + 1).padStart(2, ' ')}. [${student.student_id}] ${student.name} (100% Present)\n`;
+          } else {
+            const attendedList = [
+              ...presentPeriods.map((p) => `P${p.period} (${p.subject})`),
+              ...odPeriods.map((p) => `P${p.period} [OD] (${p.subject})`),
+            ];
+            const detail = attendedList.length > 0 ? attendedList.join(', ') : 'None';
+            txt += `${String(idx + 1).padStart(2, ' ')}. [${student.student_id}] ${student.name}\n    Present in: ${detail}\n`;
+          }
         });
       }
 
-      txt += `\n--- PERIOD-WISE PARTIAL ABSENTEES (${partialAbsentees.length}) ---\n`;
-      if (partialAbsentees.length === 0) {
+      txt += `\n--- ABSENTEES ROSTER [REG NO WISE] (${totalAbsentStudents}) ---\n`;
+      if (totalAbsentStudents === 0) {
         txt += `None\n`;
       } else {
-        partialAbsentees.forEach(({ student, absentPeriods, presentHours, totalWorking }, idx) => {
-          const detail = absentPeriods.map((p) => `P${p.period} (${p.subject})`).join(', ');
-          txt += `${String(idx + 1).padStart(2, ' ')}. [${student.student_id}] ${student.name}\n    Absent in: ${detail} [Attended: ${presentHours}/${totalWorking} hrs]\n`;
+        absenteesRoster.forEach(({ student, isFull, absentPeriods }, idx) => {
+          if (isFull) {
+            txt += `${String(idx + 1).padStart(2, ' ')}. [${student.student_id}] ${student.name} (Absent for all evaluated periods)\n`;
+          } else {
+            const detail = absentPeriods.map((p) => `P${p.period} (${p.subject})`).join(', ');
+            txt += `${String(idx + 1).padStart(2, ' ')}. [${student.student_id}] ${student.name}\n    Absent in: ${detail}\n`;
+          }
         });
       }
 
-      if (odStudents.length > 0) {
-        txt += `\n--- ON DUTY (OD) STUDENTS (${odStudents.length}) ---\n`;
-        odStudents.forEach(({ student, odPeriods }, idx) => {
+      if (odRoster.length > 0) {
+        txt += `\n--- ON DUTY (OD) STUDENTS [REG NO WISE] (${odRoster.length}) ---\n`;
+        odRoster.forEach(({ student, odPeriods }, idx) => {
           const detail = odPeriods.map((p) => `P${p.period} (${p.subject})`).join(', ');
           txt += `${String(idx + 1).padStart(2, ' ')}. [${student.student_id}] ${student.name} (${detail})\n`;
         });
       }
 
       txt += `\n--- PERIOD-BY-PERIOD SUMMARY ---\n`;
-      completedPeriods.forEach((p) => {
+      periodsList.forEach((p) => {
         const pd = periodAttendanceDetails[p];
         if (pd) {
           txt += `\nPeriod ${p} [${pd.timing}] - ${pd.subject}\n`;
           txt += `  Present: ${pd.presentCount} | OD: ${pd.odCount} | Absent: ${pd.absentCount} | Rate: ${pd.percentage}%\n`;
-          txt += `  Presentees (${pd.presentCount}): ${pd.presentList.length > 0 ? pd.presentList.map((s) => `${s.name} (${s.student_id})`).join(', ') : 'None'}\n`;
+          txt += `  Presentees (${pd.presentCount}): ${pd.presentList.length > 0 ? pd.presentList.map((s) => `${s.student_id} - ${s.name}`).join(', ') : 'None'}\n`;
           if (pd.odCount > 0) {
-            txt += `  OD (${pd.odCount}): ${pd.odList.map((s) => `${s.name} (${s.student_id})`).join(', ')}\n`;
+            txt += `  OD (${pd.odCount}): ${pd.odList.map((s) => `${s.student_id} - ${s.name}`).join(', ')}\n`;
           }
-          txt += `  Absentees (${pd.absentCount}): ${pd.absentList.length > 0 ? pd.absentList.map((s) => `${s.name} (${s.student_id})`).join(', ') : 'Nil'}\n`;
+          txt += `  Absentees (${pd.absentCount}): ${pd.absentList.length > 0 ? pd.absentList.map((s) => `${s.student_id} - ${s.name}`).join(', ') : 'Nil'}\n`;
         }
       });
 
@@ -372,43 +561,52 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
     const pData = periodAttendanceDetails[activePeriod];
     if (!pData) return 'No period data available.';
 
+    const singlePeriodPresentRoster = [
+      ...pData.presentList.map((s) => ({ student: s, isOD: false })),
+      ...pData.odList.map((s) => ({ student: s, isOD: true })),
+    ].sort((a, b) => a.student.student_id.localeCompare(b.student.student_id, undefined, { numeric: true }));
+
+    const singlePeriodAbsentRoster = [...pData.absentList].sort((a, b) =>
+      a.student_id.localeCompare(b.student_id, undefined, { numeric: true })
+    );
+
     if (format === 'standard') {
       let txt = `*SPIHER Attendance Report*\n`;
       txt += `Class: ${classId} (${classNameTitle})\n`;
       txt += `Date: ${formattedDate}${dayLabel ? ` | ${dayLabel}` : ''}\n`;
       txt += `Period: Period ${activePeriod} (${pData.subject})\n\n`;
 
-      // Presentees first
+      // Presentees first (Reg No Wise)
       txt += `*Presentees (${pData.presentCount + pData.odCount}/${activeStudents.length}):*\n`;
-      if (pData.presentList.length === 0 && pData.odCount === 0) {
+      if (singlePeriodPresentRoster.length === 0) {
         txt += `Nil (No students present)\n`;
       } else {
         let idx = 1;
-        pData.presentList.forEach((s) => {
-          txt += `${idx++}. ${s.name} (${s.student_id})\n`;
-        });
-        pData.odList.forEach((s) => {
-          txt += `${idx++}. ${s.name} (${s.student_id})\n`;
+        singlePeriodPresentRoster.forEach(({ student, isOD }) => {
+          txt += `${idx++}. ${student.student_id} - ${student.name}${isOD ? ' [OD]' : ''}\n`;
         });
       }
       txt += `\n`;
 
-      // Absentees
+      // Absentees (Reg No Wise)
       txt += `*Absentees (${pData.absentCount}):*\n`;
-      if (pData.absentList.length === 0) {
+      if (singlePeriodAbsentRoster.length === 0) {
         txt += `Nil (All students present)\n`;
       } else {
-        pData.absentList.forEach((s, i) => {
-          txt += `${i + 1}. ${s.name} (${s.student_id})\n`;
+        singlePeriodAbsentRoster.forEach((s, i) => {
+          txt += `${i + 1}. ${s.student_id} - ${s.name}\n`;
         });
       }
       txt += `\n`;
 
       // OD section (if any)
       if (pData.odCount > 0) {
+        const sortedOd = [...pData.odList].sort((a, b) =>
+          a.student_id.localeCompare(b.student_id, undefined, { numeric: true })
+        );
         txt += `*On Duty (${pData.odCount}):*\n`;
-        pData.odList.forEach((s, i) => {
-          txt += `${i + 1}. ${s.name} (${s.student_id})\n`;
+        sortedOd.forEach((s, i) => {
+          txt += `${i + 1}. ${s.student_id} - ${s.name}\n`;
         });
         txt += `\n`;
       }
@@ -421,17 +619,25 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
       let txt = `*SPIHER — ${classId} | Period ${activePeriod} (${pData.subject})*\n`;
       txt += `Date: ${formattedDate}\n\n`;
 
+      txt += `*Presentees (${pData.presentCount + pData.odCount}/${activeStudents.length} | ${pData.percentage}%):*\n`;
+      if (singlePeriodPresentRoster.length === 0) {
+        txt += `Nil Present\n`;
+      } else {
+        txt += singlePeriodPresentRoster.map(({ student }) => `${student.student_id} - ${student.name.split(' ')[0]}`).join(', ') + '\n';
+      }
+      txt += `\n`;
+
       txt += `*Absentees (${pData.absentCount}):*\n`;
-      if (pData.absentList.length === 0) {
+      if (singlePeriodAbsentRoster.length === 0) {
         txt += `All Present (Nil Absentees)\n`;
       } else {
-        pData.absentList.forEach((s, idx) => {
-          txt += `${idx + 1}. ${s.name} (${s.student_id})\n`;
+        singlePeriodAbsentRoster.forEach((s, idx) => {
+          txt += `${idx + 1}. ${s.student_id} - ${s.name}\n`;
         });
       }
 
       if (pData.odCount > 0) {
-        txt += `\n*OD (${pData.odCount}):* ${pData.odList.map((s) => s.name).join(', ')}\n`;
+        txt += `\n*OD (${pData.odCount}):* ${pData.odList.map((s) => `${s.student_id} - ${s.name}`).join(', ')}\n`;
       }
 
       txt += `\n*Present: ${pData.presentCount + pData.odCount}/${activeStudents.length}* | *${pData.percentage}%*`;
@@ -477,7 +683,8 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
     dayOrderNumber,
     classId,
     classNameTitle,
-    fullDayDetailedAnalysis,
+    multiPeriodAnalysis,
+    customPeriods,
     activePeriod,
     periodAttendanceDetails,
     activeStudents,
@@ -487,7 +694,20 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
   // Actions
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(generatedMessageText);
+      if (typeof navigator !== 'undefined' && navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(generatedMessageText);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = generatedMessageText;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        textArea.remove();
+      }
       setCopied(true);
       toast.success('Formatted attendance report copied to clipboard!', 'Copied');
       setTimeout(() => setCopied(false), 2500);
@@ -496,9 +716,29 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
     }
   };
 
-  const handleWhatsAppShare = () => {
+  const handleWhatsAppShare = async () => {
+    // 1. Native Web Share API (Avoids URL length limits & popup blockers on mobile)
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({
+          title: `SPIHER Attendance - ${classId} (${formatDate(date)})`,
+          text: generatedMessageText,
+        });
+        toast.success('Report shared successfully!', 'Shared');
+        return;
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return; // User cancelled share sheet
+      }
+    }
+
+    // 2. Mobile deep link or WhatsApp Web fallback
     const encoded = encodeURIComponent(generatedMessageText);
-    window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
+    const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile) {
+      window.location.href = `whatsapp://send?text=${encoded}`;
+    } else {
+      window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
+    }
   };
 
   const handleDownloadTxt = () => {
@@ -506,7 +746,12 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    const scopeLabel = scope === 'fullday' ? 'FullDay' : `Period_${activePeriod}`;
+    const scopeLabel =
+      scope === 'fullday'
+        ? 'FullDay'
+        : scope === 'custom'
+        ? `Custom_P${customPeriods.join('_')}`
+        : `Period_${activePeriod}`;
     link.download = `${classId}_${date}_Attendance_${scopeLabel}.txt`;
     link.click();
     URL.revokeObjectURL(url);
@@ -531,17 +776,17 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
                   <Badge variant="success" size="sm" className="font-extrabold">{classId}</Badge>
                   {dayOrderNumber && <Badge variant="purple" size="sm" className="font-bold">Day Order {dayOrderNumber}</Badge>}
                 </div>
-                <p className="text-xs text-slate-300 mt-0.5">{formatDate(date)} • Full day absentees, OD & period-wise report</p>
+                <p className="text-xs text-slate-300 mt-0.5">{formatDate(date)} • Presentees priority, custom periods & instant export</p>
               </div>
             </div>
 
-            {/* Top Action Buttons */}
-            <div className="flex items-center gap-2 shrink-0">
+            {/* Top Action Buttons - Mobile Responsive & Thumb-Friendly */}
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end shrink-0 pt-1 sm:pt-0">
               <Button
                 variant="primary"
                 size="sm"
                 onClick={handleWhatsAppShare}
-                className="gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-xs px-3.5 py-2 rounded-xl shadow-md shadow-emerald-500/20 cursor-pointer"
+                className="flex-1 sm:flex-none gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-xs px-3.5 py-2 rounded-xl shadow-md shadow-emerald-500/20 cursor-pointer min-h-[40px]"
               >
                 <MessageCircle className="w-4 h-4 fill-current" />
                 <span>Share to WhatsApp</span>
@@ -551,7 +796,7 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
                 size="sm"
                 onClick={handleCopy}
                 className={cn(
-                  'gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl border transition-all cursor-pointer',
+                  'gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl border transition-all cursor-pointer min-h-[40px]',
                   copied
                     ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-black'
                     : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
@@ -564,7 +809,7 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
                 variant="outline"
                 size="sm"
                 onClick={handleDownloadTxt}
-                className="bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border-white/10 text-xs px-2.5 py-2 rounded-xl cursor-pointer"
+                className="bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border-white/10 text-xs px-2.5 py-2 rounded-xl cursor-pointer min-h-[40px]"
                 title="Download .txt"
               >
                 <Download className="w-3.5 h-3.5" />
@@ -574,33 +819,44 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
 
           {/* Controls Row: Scope + Format */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-white/10">
-            {/* Scope Selector */}
+            {/* Scope Selector: 3 Options (Full Day, Custom, Period) */}
             <div className="space-y-1.5">
               <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Report Scope:</span>
               </label>
-              <div className="grid grid-cols-2 gap-1.5 p-1 bg-white/10 rounded-2xl text-xs font-bold">
+              <div className="grid grid-cols-3 gap-1.5 p-1 bg-white/10 rounded-2xl text-[11px] font-bold">
                 <button
                   type="button"
                   onClick={() => setScope('fullday')}
                   className={cn(
-                    'py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer',
+                    'py-2 px-1.5 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer text-center',
                     scope === 'fullday' ? 'bg-emerald-500 text-slate-950 shadow-xs font-black' : 'text-slate-300 hover:text-white'
                   )}
                 >
-                  <Calendar className="w-3.5 h-3.5 shrink-0" />
-                  <span>Full Day Summary</span>
+                  <Calendar className="w-3.5 h-3.5 shrink-0 hidden xs:inline" />
+                  <span>Full Day</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScope('custom')}
+                  className={cn(
+                    'py-2 px-1.5 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer text-center',
+                    scope === 'custom' ? 'bg-emerald-500 text-slate-950 shadow-xs font-black' : 'text-slate-300 hover:text-white'
+                  )}
+                >
+                  <Layers className="w-3.5 h-3.5 shrink-0 hidden xs:inline" />
+                  <span>Custom ({customPeriods.length}P)</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setScope('period')}
                   className={cn(
-                    'py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer',
+                    'py-2 px-1.5 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer text-center',
                     scope === 'period' ? 'bg-emerald-500 text-slate-950 shadow-xs font-black' : 'text-slate-300 hover:text-white'
                   )}
                 >
-                  <Clock className="w-3.5 h-3.5 shrink-0" />
+                  <Clock className="w-3.5 h-3.5 shrink-0 hidden xs:inline" />
                   <span>Period {activePeriod}</span>
                 </button>
               </div>
@@ -629,6 +885,72 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
               </div>
             </div>
           </div>
+
+          {/* Custom Period Multi-Selector Toolbar */}
+          {scope === 'custom' && (
+            <div className="space-y-2 pt-3 border-t border-white/10">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-[11px] text-slate-300 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Select Custom Periods ({customPeriods.length} Selected):</span>
+                </span>
+                {/* Quick Presets */}
+                <div className="flex items-center gap-1 text-[10px] font-bold flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setCustomPeriods([1, 2, 3, 4])}
+                    className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 cursor-pointer transition-colors"
+                  >
+                    Morning (P1-P4)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomPeriods([5, 6, 7])}
+                    className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 cursor-pointer transition-colors"
+                  >
+                    Afternoon (P5-P7)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomPeriods([1, 2, 3, 4, 5, 6, 7])}
+                    className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 cursor-pointer transition-colors"
+                  >
+                    All (P1-P7)
+                  </button>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {[1, 2, 3, 4, 5, 6, 7].map((p) => {
+                  const pd = periodAttendanceDetails[p];
+                  const isSelected = customPeriods.includes(p as PeriodNumber);
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => {
+                        setCustomPeriods((prev) =>
+                          prev.includes(p as PeriodNumber)
+                            ? prev.length > 1
+                              ? prev.filter((x) => x !== p).sort((a, b) => a - b)
+                              : prev
+                            : [...prev, p as PeriodNumber].sort((a, b) => a - b)
+                        );
+                      }}
+                      className={cn(
+                        'px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer',
+                        isSelected
+                          ? 'bg-emerald-500 text-slate-950 shadow-xs font-black ring-2 ring-emerald-300'
+                          : 'bg-white/10 text-slate-300 hover:bg-white/20'
+                      )}
+                    >
+                      <span>P{p}</span>
+                      {pd?.subject && <span className="text-[10px] opacity-80">({pd.subject})</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Period Selector (if period scope) */}
           {scope === 'period' && (
@@ -661,7 +983,7 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
         </CardContent>
       </Card>
 
-      {/* ── MAIN CONTENT: Message Preview + Absentees Side by Side ── */}
+      {/* ── MAIN CONTENT: Message Preview + Attendance Breakdown ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         {/* Left: Formatted Message Preview */}
@@ -717,95 +1039,203 @@ export const DailyAttendanceReportTab: React.FC<DailyAttendanceReportTabProps> =
           </CardContent>
         </Card>
 
-        {/* Right: Absentees Breakdown */}
-        <Card className="border-slate-200 bg-white shadow-xs rounded-2xl">
-          <CardHeader className="pb-3 border-b border-slate-100">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <XCircle className="w-4 h-4 text-rose-600" />
-                <CardTitle className="text-sm font-black text-slate-900">Absentees Breakdown</CardTitle>
+        {/* Right: Attendance Inspection Card (Presentees Priority) */}
+        <Card className="border-slate-200 bg-white shadow-xs rounded-2xl flex flex-col">
+          <CardHeader className="pb-3 border-b border-slate-100 bg-slate-50/50">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              {/* Segmented Switcher: Presentees (Default) vs Absentees */}
+              <div className="flex items-center p-1 bg-slate-200/80 rounded-xl text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setBreakdownView('presentees')}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer',
+                    breakdownView === 'presentees'
+                      ? 'bg-emerald-600 text-white font-black shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  )}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Presentees ({multiPeriodAnalysis.fullPresentees.length + multiPeriodAnalysis.partialPresentees.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBreakdownView('absentees')}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer',
+                    breakdownView === 'absentees'
+                      ? 'bg-rose-600 text-white font-black shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  )}
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  <span>Absentees ({multiPeriodAnalysis.fullAbsentees.length + multiPeriodAnalysis.partialAbsentees.length})</span>
+                </button>
               </div>
-              <Badge variant="danger" size="sm">
-                {fullDayDetailedAnalysis.fullAbsentees.length + fullDayDetailedAnalysis.partialAbsentees.length} Total
+
+              <Badge
+                variant={breakdownView === 'presentees' ? 'success' : 'danger'}
+                size="sm"
+                className="font-extrabold font-mono"
+              >
+                {breakdownView === 'presentees'
+                  ? `${multiPeriodAnalysis.fullPresentees.length + multiPeriodAnalysis.partialPresentees.length}/${activeStudents.length}`
+                  : `${multiPeriodAnalysis.fullAbsentees.length + multiPeriodAnalysis.partialAbsentees.length} Total`}
               </Badge>
             </div>
-            <CardDescription className="text-xs">Full-day and period-wise absentees with exact periods.</CardDescription>
+            <CardDescription className="text-xs mt-1">
+              {breakdownView === 'presentees'
+                ? 'Full and period-wise presentees with exact periods attended.'
+                : 'Full-day and period-wise absentees with exact periods missed.'}
+            </CardDescription>
           </CardHeader>
-          <CardContent className="p-4 space-y-4">
-            {/* Full Day Absentees */}
-            <div className="space-y-2">
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-rose-600 shrink-0" />
-                Full-Day Absentees ({fullDayDetailedAnalysis.fullAbsentees.length})
-              </span>
-              {fullDayDetailedAnalysis.fullAbsentees.length === 0 ? (
-                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 italic text-center">No full-day absentees today.</div>
-              ) : (
-                <div className="divide-y divide-rose-100 bg-rose-50/50 border border-rose-200 rounded-xl overflow-hidden">
-                  {fullDayDetailedAnalysis.fullAbsentees.map(({ student }) => (
-                    <div key={student.student_id} className="p-2.5 px-3 flex items-center justify-between gap-2 text-xs">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-mono text-[11px] font-bold text-rose-900 bg-rose-100 px-1.5 py-0.5 rounded shrink-0">{student.student_id}</span>
-                        <span className="font-bold text-slate-900 truncate">{student.name}</span>
-                      </div>
-                      <span className="text-[10px] font-bold text-rose-700 bg-rose-200 px-2 py-0.5 rounded-full shrink-0">Full Day</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
 
-            {/* Period-Wise Absentees */}
-            <div className="space-y-2 pt-2 border-t border-slate-100">
-              <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-                Period-Wise Absentees ({fullDayDetailedAnalysis.partialAbsentees.length})
-              </span>
-              {fullDayDetailedAnalysis.partialAbsentees.length === 0 ? (
-                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 italic text-center">No partial absentees today.</div>
-              ) : (
-                <div className="space-y-2">
-                  {fullDayDetailedAnalysis.partialAbsentees.map(({ student, absentPeriods, presentHours, totalWorking }) => (
-                    <div key={student.student_id} className="p-3 bg-amber-50/40 border border-amber-200 rounded-xl space-y-1.5 text-xs">
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-mono text-[11px] font-bold text-slate-900 bg-white px-1.5 py-0.5 rounded border border-slate-200 shrink-0">{student.student_id}</span>
-                          <span className="font-bold text-slate-900 truncate">{student.name}</span>
+          <CardContent className="p-4 space-y-4 flex-1">
+            {breakdownView === 'presentees' ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    Presentees Roster ({multiPeriodAnalysis.presenteesRoster.length})
+                  </span>
+                  <span className="text-[10px] font-semibold text-slate-500">Reg No Wise</span>
+                </div>
+
+                {multiPeriodAnalysis.presenteesRoster.length === 0 ? (
+                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 italic text-center">
+                    No presentees recorded today.
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+                    {multiPeriodAnalysis.presenteesRoster.map(({ student, isFull, presentPeriods }, idx) => (
+                      <div
+                        key={student.student_id}
+                        className={`p-2.5 rounded-xl border text-xs space-y-1.5 transition-colors ${
+                          isFull
+                            ? 'bg-white border-slate-200 hover:border-emerald-300'
+                            : 'bg-emerald-50/40 border-emerald-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-[10px] text-slate-400 font-mono shrink-0">{idx + 1}.</span>
+                            <span className="font-mono text-[11px] font-bold text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
+                              {student.student_id}
+                            </span>
+                            <span className="font-bold text-slate-900 truncate">{student.name}</span>
+                          </div>
+                          {isFull ? (
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full shrink-0">
+                              Full Day
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-teal-700 bg-teal-100 px-2 py-0.5 rounded-full shrink-0">
+                              Partial
+                            </span>
+                          )}
                         </div>
-                        <Badge variant="warning" size="sm">{presentHours}/{totalWorking} hrs</Badge>
+                        {!isFull && presentPeriods.length > 0 && (
+                          <div className="flex items-center gap-1.5 flex-wrap pl-6">
+                            <span className="text-[11px] font-bold text-emerald-800 shrink-0">Present:</span>
+                            {presentPeriods.map((pp) => (
+                              <span
+                                key={pp.period}
+                                className="px-2 py-0.5 bg-emerald-100 text-emerald-900 font-bold rounded text-[10px] border border-emerald-300"
+                              >
+                                P{pp.period} ({pp.subject})
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[11px] font-bold text-rose-800 shrink-0">Absent:</span>
-                        {absentPeriods.map((ap) => (
-                          <span key={ap.period} className="px-2 py-0.5 bg-rose-100 text-rose-900 font-bold rounded text-[11px] border border-rose-200">
-                            P{ap.period} ({ap.subject})
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-rose-600 shrink-0" />
+                      Absentees Roster ({multiPeriodAnalysis.absenteesRoster.length})
+                    </span>
+                    <span className="text-[10px] font-semibold text-slate-500">Reg No Wise</span>
+                  </div>
 
-            {/* OD Students */}
-            {fullDayDetailedAnalysis.odStudents.length > 0 && (
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-amber-600" />
-                  On Duty ({fullDayDetailedAnalysis.odStudents.length})
-                </span>
-                <div className="space-y-1.5">
-                  {fullDayDetailedAnalysis.odStudents.map(({ student, odPeriods }) => (
-                    <div key={student.student_id} className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-2 text-xs">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-mono font-bold text-[11px] text-amber-900 shrink-0">{student.student_id}</span>
-                        <span className="font-bold text-slate-900 truncate">{student.name}</span>
-                      </div>
-                      <span className="text-[11px] text-amber-900 font-bold shrink-0">{odPeriods.map((op) => `P${op.period}`).join(', ')}</span>
+                  {multiPeriodAnalysis.absenteesRoster.length === 0 ? (
+                    <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-500 italic text-center">
+                      No absentees today. All students present.
                     </div>
-                  ))}
+                  ) : (
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                      {multiPeriodAnalysis.absenteesRoster.map(({ student, isFull, absentPeriods }, idx) => (
+                        <div
+                          key={student.student_id}
+                          className={`p-2.5 rounded-xl border text-xs space-y-1.5 transition-colors ${
+                            isFull
+                              ? 'bg-rose-50/50 border-rose-200'
+                              : 'bg-amber-50/40 border-amber-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-[10px] text-slate-400 font-mono shrink-0">{idx + 1}.</span>
+                              <span className="font-mono text-[11px] font-bold text-slate-900 bg-white px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
+                                {student.student_id}
+                              </span>
+                              <span className="font-bold text-slate-900 truncate">{student.name}</span>
+                            </div>
+                            {isFull ? (
+                              <span className="text-[10px] font-bold text-rose-700 bg-rose-200 px-2 py-0.5 rounded-full shrink-0">
+                                Full Day
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-amber-700 bg-amber-200 px-2 py-0.5 rounded-full shrink-0">
+                                Partial
+                              </span>
+                            )}
+                          </div>
+                          {!isFull && absentPeriods.length > 0 && (
+                            <div className="flex items-center gap-1.5 flex-wrap pl-6">
+                              <span className="text-[11px] font-bold text-rose-800 shrink-0">Absent:</span>
+                              {absentPeriods.map((ap) => (
+                                <span
+                                  key={ap.period}
+                                  className="px-2 py-0.5 bg-rose-100 text-rose-900 font-bold rounded text-[10px] border border-rose-200"
+                                >
+                                  P{ap.period} ({ap.subject})
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
+                {/* ── OD Students (Reg No Wise) ── */}
+                {multiPeriodAnalysis.odRoster.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-slate-100">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-amber-600" />
+                      On Duty ({multiPeriodAnalysis.odRoster.length})
+                    </span>
+                    <div className="space-y-1.5 max-h-[140px] overflow-y-auto">
+                      {multiPeriodAnalysis.odRoster.map(({ student, odPeriods }, idx) => (
+                        <div key={student.student_id} className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-2 text-xs">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-[10px] text-slate-400 font-mono shrink-0">{idx + 1}.</span>
+                            <span className="font-mono font-bold text-[11px] text-amber-900 shrink-0">{student.student_id}</span>
+                            <span className="font-bold text-slate-900 truncate">{student.name}</span>
+                          </div>
+                          <span className="text-[11px] text-amber-900 font-bold shrink-0">{odPeriods.map((op) => `P${op.period}`).join(', ')}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

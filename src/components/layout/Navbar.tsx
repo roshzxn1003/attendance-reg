@@ -414,13 +414,19 @@ export const Navbar: React.FC = () => {
               )}
             </div>
 
-            {/* ── Mobile Right Header Area ── */}
-            <div className="flex md:hidden items-center gap-2 pr-14">
-              {isLoginPage && (
+            {/* ── Mobile Right Header Area: Pinned Active Class & Auth ── */}
+            <div className="flex md:hidden items-center gap-1.5 pr-14">
+              {isLoginPage ? (
                 <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700">
                   <Shield className="w-3.5 h-3.5 text-blue-600" />
                   <span>Secure Login</span>
                 </div>
+              ) : (
+                isAuthenticated && !isStudent && (
+                  <div className="scale-90 sm:scale-100 origin-right">
+                    <ClassSelector compact />
+                  </div>
+                )
               )}
             </div>
           </div>
