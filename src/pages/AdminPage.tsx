@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/common/Card';
-import { useApp } from '../context/AppContext';
 import { Badge } from '../components/common/Badge';
+import { useApp } from '../context/AppContext';
 import { StudentImport } from '../components/students/StudentImport';
 import { StudentTable } from '../components/students/StudentTable';
 import { TimetableEditor } from '../components/timetable/TimetableEditor';
@@ -10,15 +11,37 @@ import { HolidayLogManager } from '../components/daycycle/HolidayLogManager';
 import { AdminSettingsTab } from '../components/admin/AdminSettingsTab';
 import { useStudents } from '../hooks/useStudents';
 import { useDayCycle } from '../hooks/useDayCycle';
-import { getTodayDateString } from '../lib/utils';
-import { Users, Clock, Palmtree, Upload, Sliders } from 'lucide-react';
+import { getTodayDateString, cn } from '../lib/utils';
+import {
+  Users,
+  Clock,
+  Upload,
+  Sliders,
+  Calendar,
+} from 'lucide-react';
 
-type AdminTab = 'students' | 'timetable' | 'holidays' | 'settings';
+type AdminTab = 'holidays' | 'students' | 'timetable' | 'settings';
 
 export const AdminPage: React.FC = () => {
   const { selectedClass } = useApp();
-  const [activeTab, setActiveTab] = useState<AdminTab>('students');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab') as AdminTab | null;
+
+  const [activeTab, setActiveTab] = useState<AdminTab>(() => {
+    if (tabParam && ['holidays', 'students', 'timetable', 'settings'].includes(tabParam)) {
+      return tabParam;
+    }
+    return 'holidays';
+  });
+
   const [showImport, setShowImport] = useState(false);
+
+  // Sync state if URL search param changes
+  useEffect(() => {
+    if (tabParam && ['holidays', 'students', 'timetable', 'settings'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   // Student hook
   const {
@@ -40,43 +63,120 @@ export const AdminPage: React.FC = () => {
     removeEntry,
   } = useDayCycle(selectedClass.id, getTodayDateString());
 
-  const tabs: { key: AdminTab; label: string; icon: React.ReactNode }[] = [
-    { key: 'students', label: 'Classes & Students', icon: <Users className="w-4 h-4" /> },
-    { key: 'timetable', label: 'Timetable', icon: <Clock className="w-4 h-4" /> },
-    { key: 'holidays', label: 'Holidays & Day-Cycle', icon: <Palmtree className="w-4 h-4" /> },
-    { key: 'settings', label: 'Settings & System Reset', icon: <Sliders className="w-4 h-4" /> },
-  ];
+  const handleSelectTab = (key: AdminTab) => {
+    setActiveTab(key);
+    setSearchParams({ tab: key }, { replace: true });
+  };
 
   return (
     <div className="space-y-6 pb-12">
       <PageHeader
         title="Admin Control Center"
-        subtitle={`Configure class rosters, Day 1–6 timetable matrix, holidays, and system resets for ${selectedClass.name}.`}
+        subtitle={`Configure rotating Day 1–6 cycle, class rosters, timetable matrix, holidays, and system resets for ${selectedClass.name}.`}
         badge="Administration"
       />
 
-      {/* Tabs Bar */}
-      <div className="border-b border-slate-200">
-        <nav className="flex space-x-2 text-xs sm:text-sm font-bold overflow-x-auto">
-          {tabs.map(({ key, label, icon }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setActiveTab(key)}
-              className={`flex items-center gap-2 py-3 px-4 border-b-2 transition-all whitespace-nowrap cursor-pointer ${
-                activeTab === key
-                  ? 'border-blue-600 text-blue-600 font-extrabold'
-                  : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
-              }`}
-            >
-              {icon}
-              <span>{label}</span>
-            </button>
-          ))}
-        </nav>
+      {/* ── Tabs Bar: All 4 Admin Tabs Visible & Stable Across Mobile and Desktop ── */}
+      <div className="bg-white p-1 sm:p-1.5 rounded-2xl border border-slate-200 shadow-2xs">
+        <div className="grid grid-cols-4 gap-1 sm:gap-2">
+          {/* Tab 1: Day Order & Holidays */}
+          <button
+            type="button"
+            onClick={() => handleSelectTab('holidays')}
+            className={cn(
+              'flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-2 px-1 sm:px-3 text-xs font-bold rounded-xl transition-all cursor-pointer select-none text-center',
+              activeTab === 'holidays'
+                ? 'bg-blue-600 text-white shadow-xs font-black'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            )}
+            title="Day Order (1–6) cycle, schedule working dates, and manage holiday logs"
+          >
+            <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-current" />
+            <span className="truncate">
+              <span className="sm:hidden text-[11px] leading-tight">Day Order</span>
+              <span className="hidden sm:inline">Day Order & Holidays</span>
+            </span>
+          </button>
+
+          {/* Tab 2: Classes & Students */}
+          <button
+            type="button"
+            onClick={() => handleSelectTab('students')}
+            className={cn(
+              'flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-2 px-1 sm:px-3 text-xs font-bold rounded-xl transition-all cursor-pointer select-none text-center',
+              activeTab === 'students'
+                ? 'bg-blue-600 text-white shadow-xs font-black'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            )}
+            title="Manage student rosters, activation status, and Excel/CSV bulk import"
+          >
+            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate">
+              <span className="sm:hidden text-[11px] leading-tight">Students</span>
+              <span className="hidden sm:inline">Classes & Students</span>
+            </span>
+          </button>
+
+          {/* Tab 3: Timetable Matrix */}
+          <button
+            type="button"
+            onClick={() => handleSelectTab('timetable')}
+            className={cn(
+              'flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-2 px-1 sm:px-3 text-xs font-bold rounded-xl transition-all cursor-pointer select-none text-center',
+              activeTab === 'timetable'
+                ? 'bg-blue-600 text-white shadow-xs font-black'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            )}
+            title="7-period master timetable schedule for Days 1 to 6"
+          >
+            <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate">
+              <span className="sm:hidden text-[11px] leading-tight">Timetable</span>
+              <span className="hidden sm:inline">Timetable Matrix</span>
+            </span>
+          </button>
+
+          {/* Tab 4: Settings & System Reset */}
+          <button
+            type="button"
+            onClick={() => handleSelectTab('settings')}
+            className={cn(
+              'flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-2 px-1 sm:px-3 text-xs font-bold rounded-xl transition-all cursor-pointer select-none text-center',
+              activeTab === 'settings'
+                ? 'bg-blue-600 text-white shadow-xs font-black'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            )}
+            title="Administrative database diagnostics, offline backups, and system reset controls"
+          >
+            <Sliders className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate">
+              <span className="sm:hidden text-[11px] leading-tight">Settings</span>
+              <span className="hidden sm:inline">Settings & Reset</span>
+            </span>
+          </button>
+        </div>
       </div>
 
-      {/* ── TAB 1: CLASSES & STUDENTS ── */}
+      {/* ── TAB 1: DAY ORDER & HOLIDAYS LOG ── */}
+      {activeTab === 'holidays' && (
+        <HolidayLogManager
+          classId={selectedClass.id}
+          classNameTitle={selectedClass.name}
+          logs={allLogs}
+          onAssignDay={async (date, dayNumber, notes) => {
+            await assignDay(dayNumber, notes, date);
+          }}
+          onMarkHoliday={async (date, reason, notes) => {
+            await markHoliday(reason, notes, date);
+          }}
+          onDeleteEntry={async (date) => {
+            await removeEntry(date);
+          }}
+          loading={cycleLoading}
+        />
+      )}
+
+      {/* ── TAB 2: CLASSES & STUDENTS ── */}
       {activeTab === 'students' && (
         <div className="space-y-6">
           {/* Import Banner Card */}
@@ -142,30 +242,11 @@ export const AdminPage: React.FC = () => {
         </div>
       )}
 
-      {/* ── TAB 2: TIMETABLE ── */}
+      {/* ── TAB 3: TIMETABLE ── */}
       {activeTab === 'timetable' && (
         <TimetableEditor
           classId={selectedClass.id}
           classNameTitle={selectedClass.name}
-        />
-      )}
-
-      {/* ── TAB 3: HOLIDAYS & DAY-CYCLE LOG ── */}
-      {activeTab === 'holidays' && (
-        <HolidayLogManager
-          classId={selectedClass.id}
-          classNameTitle={selectedClass.name}
-          logs={allLogs}
-          onAssignDay={async (date, dayNumber, notes) => {
-            await assignDay(dayNumber, notes, date);
-          }}
-          onMarkHoliday={async (date, reason, notes) => {
-            await markHoliday(reason, notes, date);
-          }}
-          onDeleteEntry={async (date) => {
-            await removeEntry(date);
-          }}
-          loading={cycleLoading}
         />
       )}
 

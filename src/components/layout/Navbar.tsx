@@ -15,12 +15,14 @@ import {
 } from 'lucide-react';
 import { ClassSelector } from '../common/ClassSelector';
 import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/AppContext';
 import { ChangePasswordModal } from '../auth/ChangePasswordModal';
 import { StaggeredMenu } from './StaggeredMenu';
 import { cn } from '../../lib/utils';
 
 export const Navbar: React.FC = () => {
   const { user, isAuthenticated, logout, isStudent, isFaculty, isAdmin } = useAuth();
+  const { selectedClass } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -102,9 +104,27 @@ export const Navbar: React.FC = () => {
     </div>
   );
 
-  // ── User Identity Footer inside the sliding panel ────────────────────────
+  // ── User Identity & Class Selector Footer inside the sliding panel ──────
   const mobilePanelFooter = (
-    <div className="pt-4 mt-2 border-t border-slate-100 space-y-3">
+    <div className="pt-4 mt-4 border-t border-slate-100 space-y-3">
+      {/* Active Class Switcher at bottom of mobile menu */}
+      {!isStudent && (
+        <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-2">
+          <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-500">
+            <span className="flex items-center gap-1.5">
+              <GraduationCap className="w-3.5 h-3.5 text-blue-600" />
+              <span>Active Class</span>
+            </span>
+            <span className="text-blue-700 font-mono font-bold text-xs px-2 py-0.5 bg-blue-100/70 border border-blue-200/60 rounded-md">
+              {selectedClass.id}
+            </span>
+          </div>
+          <div className="w-full flex justify-center pt-0.5">
+            <ClassSelector />
+          </div>
+        </div>
+      )}
+
       {/* User info card */}
       {user && (
         <div className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
@@ -407,6 +427,24 @@ export const Navbar: React.FC = () => {
         </div>
       </header>
 
+      {/* ── Mobile View: Fixed Bottom Active Class Selector Bar ── */}
+      {isAuthenticated && !isLoginPage && !isStudent && (
+        <aside
+          aria-label="Mobile active class switcher"
+          className="md:hidden fixed bottom-0 left-0 right-0 z-25 bg-white/95 backdrop-blur-md border-t border-slate-200 py-2 px-3.5 shadow-lg shadow-slate-900/5"
+        >
+          <div className="max-w-md mx-auto flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <GraduationCap className="w-4 h-4 text-blue-600 shrink-0" />
+              <span className="text-xs font-black text-slate-700 uppercase tracking-wider truncate">
+                Active Class:
+              </span>
+            </div>
+            <ClassSelector compact />
+          </div>
+        </aside>
+      )}
+
       {/* ════════════════════════════════════════════════════════════════════
           MOBILE STAGGERED MENU OVERLAY
           Hidden when on login page or unauthenticated
@@ -427,22 +465,6 @@ export const Navbar: React.FC = () => {
             panelHeader={mobilePanelHeader}
             panelFooter={mobilePanelFooter}
           />
-        </div>
-      )}
-
-      {/* ════════════════════════════════════════════════════════════════════
-          MOBILE STICKY BOTTOM CLASS SELECTOR BAR
-          Shown only on mobile (md:hidden) for authenticated non-student users
-         ════════════════════════════════════════════════════════════════════ */}
-      {isAuthenticated && !isLoginPage && !isStudent && (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] px-4 py-2">
-          <div className="flex items-center justify-between gap-3 max-w-sm mx-auto">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 shrink-0 flex items-center gap-1.5">
-              <GraduationCap className="w-3.5 h-3.5 text-blue-600" />
-              <span>Active Class:</span>
-            </span>
-            <ClassSelector compact />
-          </div>
         </div>
       )}
 

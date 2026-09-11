@@ -500,7 +500,7 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
           </Card>
 
           {/* Sticky Save Action Bar */}
-          <div className="sticky bottom-[60px] md:bottom-3 z-20 bg-white/95 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border-2 border-slate-300 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-2">
+          <div className="sticky bottom-2 sm:bottom-3 z-30 bg-white/95 backdrop-blur-md p-2.5 sm:p-3.5 rounded-2xl border-2 border-slate-300 shadow-xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-xs w-full sm:w-auto">
               {!isAllMarked ? (
                 <div className="flex items-center gap-2 text-amber-700 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-200 font-bold w-full sm:w-auto text-xs">
@@ -523,7 +523,7 @@ export const AttendanceMarkingGrid: React.FC<AttendanceMarkingGridProps> = ({
                 isLoading={saving}
                 onClick={handleSaveClick}
                 className={cn(
-                  'gap-2 w-full sm:w-auto font-black px-6 py-2.5 text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer',
+                  'gap-2 w-full sm:w-auto font-black px-5 sm:px-6 py-2.5 text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer',
                   isMultiPeriod
                     ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20'
                     : isAlreadySaved

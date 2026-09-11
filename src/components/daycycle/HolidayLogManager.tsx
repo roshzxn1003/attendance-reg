@@ -331,9 +331,15 @@ export const HolidayLogManager: React.FC<HolidayLogManagerProps> = ({
 
       {/* Add / Edit Date Assignment Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+        <div
+          onClick={() => setShowAddModal(false)}
+          className="fixed inset-0 z-50 flex items-start justify-center p-2.5 sm:p-4 pt-3 sm:pt-6 md:pt-10 bg-black/50 backdrop-blur-xs overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md border border-slate-200 overflow-hidden mt-0 sm:mt-1 animate-in fade-in slide-in-from-top-4 duration-200"
+          >
+            <div className="px-5 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-900">
                 Set Calendar Date Assignment
               </h3>

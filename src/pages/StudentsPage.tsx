@@ -9,7 +9,7 @@ import { MonthlyAttendanceView } from '../components/students/MonthlyAttendanceV
 import { FullAttendanceReportView } from '../components/students/FullAttendanceReportView';
 import { StudentBrowseList } from '../components/students/StudentBrowseList';
 import { StudentProfileView } from '../components/students/StudentProfileView';
-import { getTodayDateString } from '../lib/utils';
+import { getTodayDateString, cn } from '../lib/utils';
 import { Grid, CalendarRange, FileText, Users } from 'lucide-react';
 
 type StudentTab = 'register' | 'monthly' | 'report' | 'roster';
@@ -42,65 +42,85 @@ export const StudentsPage: React.FC = () => {
             badge={`${activeCount} Enrolled (${selectedClass.id})`}
           />
 
-          {/* Top View Selector Tabs */}
-          <div className="border-b border-slate-200">
-            <nav className="flex space-x-2 text-xs sm:text-sm font-bold overflow-x-auto">
+          {/* Top View Selector Tabs: Stable 4-column Grid Across Mobile & Desktop */}
+          <div className="bg-white p-1 sm:p-1.5 rounded-2xl border border-slate-200 shadow-2xs">
+            <div className="grid grid-cols-4 gap-1 sm:gap-2">
               {/* Tab 1: Requested Template: Period Grid Register */}
               <button
                 type="button"
                 onClick={() => setActiveTab('register')}
-                className={`flex items-center gap-2 py-3 px-4 border-b-2 transition-all whitespace-nowrap ${
+                className={cn(
+                  'flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-2 px-1 sm:px-3 text-xs font-bold rounded-xl transition-all cursor-pointer select-none text-center',
                   activeTab === 'register'
-                    ? 'border-blue-600 text-blue-600 font-extrabold'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
-                }`}
+                    ? 'bg-blue-600 text-white shadow-xs font-black'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                )}
+                title="Monthly Period Register Grid"
               >
-                <Grid className="w-4 h-4" />
-                <span>Monthly Period Register Grid</span>
+                <Grid className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                <span className="truncate">
+                  <span className="sm:hidden text-[11px] leading-tight">Register</span>
+                  <span className="hidden sm:inline">Register Grid</span>
+                </span>
               </button>
 
               {/* Tab 2: Monthly Attendance */}
               <button
                 type="button"
                 onClick={() => setActiveTab('monthly')}
-                className={`flex items-center gap-2 py-3 px-4 border-b-2 transition-all whitespace-nowrap ${
+                className={cn(
+                  'flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-2 px-1 sm:px-3 text-xs font-bold rounded-xl transition-all cursor-pointer select-none text-center',
                   activeTab === 'monthly'
-                    ? 'border-blue-600 text-blue-600 font-extrabold'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
-                }`}
+                    ? 'bg-blue-600 text-white shadow-xs font-black'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                )}
+                title="Monthly attendance percentage and summary"
               >
-                <CalendarRange className="w-4 h-4" />
-                <span>Monthly Summary</span>
+                <CalendarRange className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                <span className="truncate">
+                  <span className="sm:hidden text-[11px] leading-tight">Monthly</span>
+                  <span className="hidden sm:inline">Monthly Summary</span>
+                </span>
               </button>
 
               {/* Tab 3: Full Audit Report */}
               <button
                 type="button"
                 onClick={() => setActiveTab('report')}
-                className={`flex items-center gap-2 py-3 px-4 border-b-2 transition-all whitespace-nowrap ${
+                className={cn(
+                  'flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-2 px-1 sm:px-3 text-xs font-bold rounded-xl transition-all cursor-pointer select-none text-center',
                   activeTab === 'report'
-                    ? 'border-blue-600 text-blue-600 font-extrabold'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
-                }`}
+                    ? 'bg-blue-600 text-white shadow-xs font-black'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                )}
+                title="Full audit log and records"
               >
-                <FileText className="w-4 h-4" />
-                <span>Full Audit Log</span>
+                <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                <span className="truncate">
+                  <span className="sm:hidden text-[11px] leading-tight">Audit Log</span>
+                  <span className="hidden sm:inline">Full Audit Log</span>
+                </span>
               </button>
 
               {/* Tab 4: Cumulative Roster */}
               <button
                 type="button"
                 onClick={() => setActiveTab('roster')}
-                className={`flex items-center gap-2 py-3 px-4 border-b-2 transition-all whitespace-nowrap ${
+                className={cn(
+                  'flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-2 px-1 sm:px-3 text-xs font-bold rounded-xl transition-all cursor-pointer select-none text-center',
                   activeTab === 'roster'
-                    ? 'border-blue-600 text-blue-600 font-extrabold'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
-                }`}
+                    ? 'bg-blue-600 text-white shadow-xs font-black'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                )}
+                title="Class roster and profiles"
               >
-                <Users className="w-4 h-4" />
-                <span>Class Roster</span>
+                <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                <span className="truncate">
+                  <span className="sm:hidden text-[11px] leading-tight">Roster</span>
+                  <span className="hidden sm:inline">Class Roster</span>
+                </span>
               </button>
-            </nav>
+            </div>
           </div>
 
           {/* ── View 1: Monthly Period Register Grid (Requested Template) ── */}

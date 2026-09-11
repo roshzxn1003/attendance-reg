@@ -4,21 +4,17 @@ import {
   Sparkles,
   Palmtree,
   CheckCircle2,
-
   Pencil,
-
   Check,
-
-
+  RefreshCw,
 } from 'lucide-react';
 import { DayNumber, ClassId } from '../../types';
 import { DayCycleEntry } from '../../services/dayCycleService';
-import { DAY_ORDERS } from '../../data/timetable';
 import { formatDate } from '../../lib/utils';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
 import { Card, CardContent } from '../common/Card';
-import { ConfirmDayChangeModal } from './ConfirmDayChangeModal';
+import { ChangeDayOrderModal } from './ChangeDayOrderModal';
 import { cn } from '../../lib/utils';
 
 interface DayCycleSetupCardProps {
@@ -32,6 +28,9 @@ interface DayCycleSetupCardProps {
   onAssignDay: (dayNumber: DayNumber, notes?: string) => Promise<void>;
   onMarkHoliday: (reason: string, notes?: string) => Promise<void>;
   loading: boolean;
+  isModalOpen?: boolean;
+  setIsModalOpen?: (open: boolean) => void;
+  className?: string;
 }
 
 export const DayCycleSetupCard: React.FC<DayCycleSetupCardProps> = ({
@@ -44,293 +43,185 @@ export const DayCycleSetupCard: React.FC<DayCycleSetupCardProps> = ({
   onAssignDay,
   onMarkHoliday,
   loading,
+  isModalOpen: externalModalOpen,
+  setIsModalOpen: setExternalModalOpen,
+  className,
 }) => {
-  const [isChanging, setIsChanging] = useState(false);
-  const [showHolidayInput, setShowHolidayInput] = useState(false);
-  const [holidayReason, setHolidayReason] = useState('College Holiday');
-  const [pendingAction, setPendingAction] = useState<{
-    type: 'working' | 'holiday';
-    dayNumber?: DayNumber;
-    reason?: string;
-  } | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const [internalModalOpen, setInternalModalOpen] = useState(false);
+
+  const isModalOpen = externalModalOpen !== undefined ? externalModalOpen : internalModalOpen;
+  const setModalOpen = setExternalModalOpen !== undefined ? setExternalModalOpen : setInternalModalOpen;
 
   const isAssigned = entry !== null;
   const isHoliday = entry?.is_holiday === true;
   const currentDayNumber = entry?.day_number;
 
-  const handleDayClick = (dayNum: DayNumber) => {
-    if (isAssigned) {
-      // Prompt confirmation before changing existing assignment
-      setPendingAction({
-        type: 'working',
-        dayNumber: dayNum,
-      });
-    } else {
-      // Direct assign for new date
-      onAssignDay(dayNum);
-    }
-  };
-
-  const handleHolidaySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isAssigned) {
-      setPendingAction({
-        type: 'holiday',
-        reason: holidayReason,
-      });
-    } else {
-      onMarkHoliday(holidayReason);
-      setShowHolidayInput(false);
-    }
-  };
-
-  const executePendingChange = async () => {
-    if (!pendingAction) return;
-    setIsSaving(true);
-    try {
-      if (pendingAction.type === 'working' && pendingAction.dayNumber) {
-        await onAssignDay(pendingAction.dayNumber);
-      } else if (pendingAction.type === 'holiday' && pendingAction.reason) {
-        await onMarkHoliday(pendingAction.reason);
-      }
-      setPendingAction(null);
-      setIsChanging(false);
-      setShowHolidayInput(false);
-    } finally {
-      setIsSaving(false);
-    }
+  const handleQuickAccept = async () => {
+    await onAssignDay(suggestedDay);
   };
 
   return (
     <>
-      <Card className={cn(
-        'transition-all duration-200 border-2',
-        !isAssigned
-          ? 'border-blue-300 bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-white shadow-sm'
-          : isHoliday
-          ? 'border-rose-200 bg-rose-50/40'
-          : 'border-emerald-200 bg-emerald-50/30'
-      )}>
-        <CardContent className="p-5">
-          {/* CASE 1: Date is ASSIGNED and NOT in edit mode */}
-          {isAssigned && !isChanging && (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3.5">
-                <div
-                  className={cn(
-                    'w-11 h-11 rounded-2xl flex items-center justify-center shadow-xs',
-                    isHoliday ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'
-                  )}
-                >
-                  {isHoliday ? <Palmtree className="w-6 h-6" /> : <CheckCircle2 className="w-6 h-6" />}
+      <Card
+        className={cn(
+          'transition-all duration-200 rounded-2xl',
+          !isAssigned
+            ? 'border-indigo-200/80 bg-indigo-50/40 shadow-2xs'
+            : isHoliday
+            ? 'border-rose-200/80 bg-rose-50/30 shadow-2xs'
+            : 'border-slate-200/90 bg-white hover:border-slate-300 shadow-2xs',
+          className
+        )}
+      >
+        <CardContent className="p-3 sm:p-3.5">
+          {/* CASE 1: Date is ASSIGNED WORKING DAY */}
+          {isAssigned && !isHoliday && (
+            <div className="flex items-center justify-between gap-2.5 sm:gap-3">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200/60 flex items-center justify-center shrink-0 shadow-2xs">
+                  <CheckCircle2 className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
                 </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base font-bold text-slate-900">
-                      {isHoliday ? (
-                        <span>Holiday: {entry?.holiday_reason || 'Holiday'}</span>
-                      ) : (
-                        <span>Day Order {currentDayNumber} Active</span>
-                      )}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                    <h3 className="text-xs sm:text-sm font-black text-slate-900 leading-tight truncate">
+                      Day Order {currentDayNumber} Active
                     </h3>
-                    <Badge variant={isHoliday ? 'danger' : 'success'} size="sm">
-                      {isHoliday ? 'Non-Working' : `DO ${currentDayNumber}`}
+                    <Badge variant="success" size="sm" className="font-extrabold text-[10px] hidden min-[360px]:inline-flex py-0 px-1.5">
+                      DO {currentDayNumber}
                     </Badge>
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5 font-medium">
-                    {formatDate(date)} • {classId}
+                  <p className="text-[11px] text-slate-500 font-medium truncate leading-tight mt-0.5">
+                    {formatDate(date)} • 7 Periods • {classId}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 self-start sm:self-auto">
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setIsChanging(true)}
-                  className="gap-1.5 text-xs bg-white border-slate-300 shadow-2xs hover:bg-slate-50 text-slate-700"
+                  onClick={() => setModalOpen(true)}
+                  className="gap-1.5 text-xs bg-white border-slate-200 shadow-2xs hover:bg-slate-50 text-slate-700 hover:text-slate-900 font-bold py-1.5 px-2.5 sm:px-3 rounded-xl cursor-pointer"
                 >
                   <Pencil className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Correct Day Order</span>
+                  <span>
+                    <span className="min-[480px]:hidden">Change</span>
+                    <span className="hidden min-[480px]:inline">Change Day Order</span>
+                  </span>
                 </Button>
               </div>
             </div>
           )}
 
-          {/* CASE 2: Date is UNASSIGNED or CR clicked "Correct Day Order" */}
-          {(!isAssigned || isChanging) && (
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 pb-3">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-blue-600 shrink-0" />
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">
-                      {!isAssigned ? (
-                        'This date has not been assigned a Day Order yet.'
-                      ) : (
-                        `Correct Day Order for ${formatDate(date)}`
-                      )}
-                    </h3>
-                    <p className="text-xs text-slate-500">
-                      Select a Day Order (1–6) or mark this date as a holiday for {classId}.
-                    </p>
-                  </div>
+          {/* CASE 2: Date is HOLIDAY */}
+          {isAssigned && isHoliday && (
+            <div className="flex items-center justify-between gap-2.5 sm:gap-3">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-rose-50 text-rose-700 border border-rose-200/60 flex items-center justify-center shrink-0 shadow-2xs">
+                  <Palmtree className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
                 </div>
-
-                {isChanging && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsChanging(false);
-                      setShowHolidayInput(false);
-                    }}
-                    className="text-xs text-slate-500 hover:text-slate-800 font-medium underline self-start sm:self-auto"
-                  >
-                    Cancel Correction
-                  </button>
-                )}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                    <h3 className="text-xs sm:text-sm font-black text-rose-950 leading-tight truncate">
+                      Holiday: {entry?.holiday_reason || 'College Holiday'}
+                    </h3>
+                    <Badge variant="danger" size="sm" className="font-extrabold text-[10px] hidden min-[360px]:inline-flex py-0 px-1.5">
+                      Holiday
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-rose-800/80 font-medium truncate leading-tight mt-0.5">
+                    {formatDate(date)} • Attendance marking paused • {classId}
+                  </p>
+                </div>
               </div>
 
-              {/* Suggestion banner */}
-              <div className="flex items-center justify-between p-3 rounded-xl bg-blue-100/70 border border-blue-200/80 text-xs text-blue-950 flex-wrap gap-2">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-blue-600 shrink-0 animate-pulse" />
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setModalOpen(true)}
+                  className="gap-1.5 text-xs bg-white border-rose-200 text-rose-700 hover:bg-rose-50 font-bold py-1.5 px-2.5 sm:px-3 rounded-xl cursor-pointer shadow-2xs"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-rose-600" />
                   <span>
-                    <strong>Recommended:</strong> Set as <strong>Day Order {suggestedDay}</strong>
+                    <span className="min-[480px]:hidden">Change</span>
+                    <span className="hidden min-[480px]:inline">Change to Working Day</span>
+                  </span>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* CASE 3: Date is UNASSIGNED */}
+          {!isAssigned && (
+            <div className="flex items-center justify-between gap-2.5 sm:gap-3">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200/60 flex items-center justify-center shrink-0 shadow-2xs">
+                  <Calendar className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                    <h3 className="text-xs sm:text-sm font-black text-slate-900 leading-tight truncate">
+                      Day Order Not Assigned Yet
+                    </h3>
+                    <Badge variant="warning" size="sm" className="font-extrabold text-[10px] hidden min-[360px]:inline-flex py-0 px-1.5">
+                      Pending Setup
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-slate-600 font-medium truncate leading-tight mt-0.5">
+                    {formatDate(date)} • Recommended: <strong>Day Order {suggestedDay}</strong>
                     {prevWorkingDate && prevWorkingDay && (
-                      <span className="text-blue-800 ml-1">
-                        (follows Day Order {prevWorkingDay} on {prevWorkingDate})
+                      <span className="text-slate-500 ml-1">
+                        (follows DO {prevWorkingDay})
                       </span>
                     )}
-                  </span>
+                  </p>
                 </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap shrink-0">
                 <Button
                   variant="primary"
                   size="sm"
                   disabled={loading}
-                  onClick={() => handleDayClick(suggestedDay)}
-                  className="py-1 px-3 text-xs gap-1.5 shadow-xs font-bold"
+                  onClick={handleQuickAccept}
+                  className="gap-1.5 text-xs font-black py-1.5 px-3 rounded-xl shadow-xs bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer"
                 >
                   <Check className="w-3.5 h-3.5" />
-                  Accept Day Order {suggestedDay}
+                  <span>Accept DO {suggestedDay}</span>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={loading}
+                  onClick={() => setModalOpen(true)}
+                  className="gap-1 text-xs font-bold py-1.5 px-3 rounded-xl bg-white border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer shadow-2xs"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Choose Day / Holiday</span>
                 </Button>
               </div>
-
-              {/* Manual Selection Grid */}
-              <div className="space-y-2">
-                <span className="text-[11px] uppercase tracking-wider font-bold text-slate-500">
-                  Or manually choose Day Order / Holiday:
-                </span>
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-                  {DAY_ORDERS.map((d) => {
-                    const isSuggested = d.dayNumber === suggestedDay;
-                    const isCurrent = isAssigned && currentDayNumber === d.dayNumber;
-                    return (
-                      <button
-                        key={d.dayNumber}
-                        type="button"
-                        disabled={loading}
-                        onClick={() => handleDayClick(d.dayNumber)}
-                        className={cn(
-                          'flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-bold transition-all',
-                          isCurrent
-                            ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm'
-                            : isSuggested
-                            ? 'bg-white text-blue-700 border-blue-400 ring-2 ring-blue-400/20 hover:bg-blue-50'
-                            : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                        )}
-                      >
-                        <span>{d.label}</span>
-                        {isSuggested && (
-                          <span className="text-[9px] font-semibold text-blue-600 uppercase tracking-tight mt-0.5">
-                            Suggested
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-
-                  {/* Mark Holiday button */}
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() => setShowHolidayInput((v) => !v)}
-                    className={cn(
-                      'flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-bold transition-all',
-                      isHoliday
-                        ? 'bg-rose-600 text-white border-rose-700 shadow-sm'
-                        : 'bg-white text-rose-700 border-rose-200 hover:bg-rose-50 hover:border-rose-300'
-                    )}
-                  >
-                    <span className="flex items-center gap-1">
-                      <Palmtree className="w-3.5 h-3.5" />
-                      Holiday
-                    </span>
-                    <span className="text-[9px] font-normal text-rose-600 mt-0.5">
-                      No cycle advance
-                    </span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Inline Holiday Reason Input */}
-              {showHolidayInput && (
-                <form
-                  onSubmit={handleHolidaySubmit}
-                  className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex flex-col sm:flex-row items-center gap-2 text-xs"
-                >
-                  <span className="font-bold text-rose-900 shrink-0">Holiday Reason:</span>
-                  <input
-                    type="text"
-                    value={holidayReason}
-                    onChange={(e) => setHolidayReason(e.target.value)}
-                    placeholder="e.g. Saturday Holiday, Pongal, Govt Holiday"
-                    className="flex-1 px-3 py-1.5 bg-white border border-rose-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
-                    required
-                  />
-                  <div className="flex items-center gap-2 self-end sm:self-auto">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      type="button"
-                      onClick={() => setShowHolidayInput(false)}
-                      className="text-xs py-1"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      type="submit"
-                      disabled={loading}
-                      className="text-xs py-1 font-bold"
-                    >
-                      Confirm Holiday
-                    </Button>
-                  </div>
-                </form>
-              )}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Confirmation Modal */}
-      {pendingAction && (
-        <ConfirmDayChangeModal
-          date={date}
-          classId={classId}
-          currentType={isHoliday ? 'holiday' : isAssigned ? 'working' : 'unassigned'}
-          currentDayNumber={currentDayNumber}
-          newType={pendingAction.type}
-          newDayNumber={pendingAction.dayNumber}
-          holidayReason={pendingAction.reason}
-          onConfirm={executePendingChange}
-          onClose={() => setPendingAction(null)}
-          isSaving={isSaving}
-        />
-      )}
+      {/* Change Day Order Modal */}
+      <ChangeDayOrderModal
+        isOpen={isModalOpen}
+        onClose={() => setModalOpen(false)}
+        date={date}
+        classId={classId}
+        currentEntry={entry}
+        suggestedDay={suggestedDay}
+        prevWorkingDate={prevWorkingDate}
+        prevWorkingDay={prevWorkingDay}
+        onAssignDay={onAssignDay}
+        onMarkHoliday={onMarkHoliday}
+      />
     </>
   );
 };
+
+export default DayCycleSetupCard;

@@ -93,7 +93,7 @@ export const TimetableEditor: React.FC<TimetableEditorProps> = ({ classId, class
       {/* Top Controls Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         {/* Day Order Selector Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+        <div className="flex flex-wrap items-center gap-1.5">
           {DAY_ORDERS.map((d) => {
             const isSelected = viewMode === 'day' && selectedDayNumber === d.dayNumber;
             return (
@@ -105,9 +105,9 @@ export const TimetableEditor: React.FC<TimetableEditorProps> = ({ classId, class
                   setViewMode('day');
                 }}
                 className={cn(
-                  'px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all duration-150 whitespace-nowrap',
+                  'px-3 sm:px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all duration-150 whitespace-nowrap cursor-pointer',
                   isSelected
-                    ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-500/20'
+                    ? 'bg-blue-600 text-white shadow-xs ring-2 ring-blue-500/20 font-black'
                     : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:text-slate-900'
                 )}
               >
@@ -120,9 +120,9 @@ export const TimetableEditor: React.FC<TimetableEditorProps> = ({ classId, class
             type="button"
             onClick={() => setViewMode('matrix')}
             className={cn(
-              'flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg transition-all duration-150 whitespace-nowrap ml-1',
+              'flex items-center gap-1 px-3 sm:px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all duration-150 whitespace-nowrap cursor-pointer',
               viewMode === 'matrix'
-                ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-500/20'
+                ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-500/20 font-black'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
             )}
           >

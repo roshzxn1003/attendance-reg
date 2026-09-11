@@ -149,33 +149,36 @@ export const StudentAttendanceSummaryTable: React.FC<StudentAttendanceSummaryTab
           </div>
 
           {/* Scope Toggle Tabs */}
-          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl text-xs font-semibold self-start lg:self-auto border border-slate-200">
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-1 p-1 bg-slate-100 rounded-xl text-xs font-semibold w-full sm:w-auto border border-slate-200">
             <button
               type="button"
               onClick={() => setScope('today')}
               className={cn(
-                'flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition-all',
+                'flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer text-center',
                 scope === 'today'
                   ? 'bg-white text-slate-900 shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
               )}
             >
-              <Calendar className="w-3.5 h-3.5 text-blue-600" />
-              <span>Selected Date ({date})</span>
+              <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              <span className="truncate">
+                <span className="sm:hidden">Selected Date</span>
+                <span className="hidden sm:inline">Selected Date ({date})</span>
+              </span>
             </button>
 
             <button
               type="button"
               onClick={() => setScope('cumulative')}
               className={cn(
-                'flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition-all',
+                'flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer text-center',
                 scope === 'cumulative'
                   ? 'bg-white text-slate-900 shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
               )}
             >
-              <Layers className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Overall Cumulative</span>
+              <Layers className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+              <span className="truncate">Overall Cumulative</span>
             </button>
           </div>
         </div>

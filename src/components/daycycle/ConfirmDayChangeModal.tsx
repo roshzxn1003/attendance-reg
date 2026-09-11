@@ -54,13 +54,30 @@ export const ConfirmDayChangeModal: React.FC<ConfirmDayChangeModalProps> = ({
     };
   }, [classId, date]);
 
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const hasAttendance = (attendanceCount ?? 0) > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md border border-slate-200 overflow-hidden">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-start justify-center p-2.5 sm:p-4 pt-3 sm:pt-6 md:pt-10 bg-black/50 backdrop-blur-xs overflow-y-auto"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-2xl shadow-xl w-full max-w-md border border-slate-200 overflow-hidden max-h-[calc(100vh-1.5rem)] sm:max-h-[88vh] flex flex-col mt-0 sm:mt-1 animate-in fade-in slide-in-from-top-4 duration-200"
+      >
         {/* Warning Header */}
-        <div className={`flex items-center justify-between px-6 py-4 border-b ${
+        <div className={`flex items-center justify-between px-5 sm:px-6 py-3.5 sm:py-4 border-b shrink-0 ${
           hasAttendance ? 'border-rose-200 bg-rose-50 text-rose-950' : 'border-amber-100 bg-amber-50/70 text-amber-900'
         }`}>
           <div className="flex items-center gap-2.5">
@@ -86,7 +103,7 @@ export const ConfirmDayChangeModal: React.FC<ConfirmDayChangeModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 space-y-4">
+        <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
           {checkingAttendance ? (
             <div className="flex items-center justify-center py-4 gap-2 text-xs text-slate-500">
               <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
@@ -135,7 +152,7 @@ export const ConfirmDayChangeModal: React.FC<ConfirmDayChangeModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/40">
+        <div className="flex items-center justify-end gap-3 px-5 sm:px-6 py-3.5 sm:py-4 border-t border-slate-100 bg-slate-50/60 shrink-0">
           <Button variant="ghost" size="sm" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>

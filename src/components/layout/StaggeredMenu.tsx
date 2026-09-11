@@ -509,16 +509,16 @@ export const StaggeredMenu: React.FC<StaggeredMenuProps> = ({
           ) : null}
 
           {/* Navigation Items List */}
-          <div className="sm-panel-inner flex-1 flex flex-col gap-4">
+          <div className="sm-panel-inner flex-1 flex flex-col gap-5 my-auto">
             <ul
-              className="sm-panel-list list-none m-0 p-0 flex flex-col gap-1.5"
+              className="sm-panel-list list-none m-0 p-0 flex flex-col gap-3 sm:gap-4.5"
               role="list"
               data-numbering={displayItemNumbering || undefined}
             >
               {items.length ? (
                 items.map((it, idx) => (
                   <li
-                    className="sm-panel-itemWrap relative overflow-hidden leading-none"
+                    className="sm-panel-itemWrap relative overflow-hidden"
                     key={it.label + idx}
                   >
                     <NavLink
@@ -527,13 +527,13 @@ export const StaggeredMenu: React.FC<StaggeredMenuProps> = ({
                       data-index={idx + 1}
                       onClick={closeMenu}
                       className={({ isActive }) =>
-                        `sm-panel-item relative font-black cursor-pointer leading-none tracking-tight uppercase inline-block no-underline pr-8 transition-colors duration-150 ${
+                        `sm-panel-item relative font-black cursor-pointer leading-snug tracking-tight uppercase inline-block no-underline pr-10 py-1 sm:py-1.5 transition-colors duration-150 ${
                           isActive
                             ? 'text-blue-600'
                             : 'text-slate-900 hover:text-blue-600'
                         }`
                       }
-                      style={{ fontSize: 'clamp(1.75rem, 6.5vw, 2.5rem)' }}
+                      style={{ fontSize: 'clamp(1.35rem, 5.2vw, 1.95rem)' }}
                     >
                       <span
                         className="sm-panel-itemLabel inline-block will-change-transform"
@@ -644,7 +644,7 @@ export const StaggeredMenu: React.FC<StaggeredMenuProps> = ({
           counter-increment: smItem;
           content: counter(smItem, decimal-leading-zero);
           position: absolute;
-          top: 0.1em;
+          top: 0.45em;
           right: 0;
           font-size: 0.8rem;
           font-weight: 700;

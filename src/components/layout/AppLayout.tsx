@@ -18,7 +18,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       <PWAInstallBanner />
       <Navbar />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 pb-20 md:pb-8 flex flex-col">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 pb-20 md:pb-8 flex flex-col">
         <PageTransition>
           {children || <Outlet />}
         </PageTransition>
@@ -26,7 +26,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
       <NetworkStatusBar />
 
-      <footer className="bg-white border-t border-slate-200 py-6 text-xs text-slate-500">
+      <footer className="bg-white border-t border-slate-200 py-6 mb-14 md:mb-0 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
